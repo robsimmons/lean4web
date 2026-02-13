@@ -1,3 +1,4 @@
+import Mathlib
 import VersoManual
 open Verso Doc
 open Verso.Genre Manual
@@ -17,8 +18,15 @@ We also support inline lean, like this: {lean}`Nat.add_assoc`.
 We also support block lean, like this:
 
 ```lean
-/-- The name we will be greeting -/
-def theName := "Jimothy?? "
+-- let R be a commutative ring (for example the reals)
+variable (R : Type) [CommRing R]
 
-#eval s!"Hello {theName}"
+-- let x and y be elements of R
+variable (x y : R)
+
+-- then (x+y)*(x+2y)=x^2+3xy+2y^2
+
+example : (x+y)*(x+2*y)=x^2+3*x*y+2*y^2 := by
+  -- the `ring` tactic solves this goal automatically
+  ring
 ```
