@@ -5,9 +5,9 @@ ulimit -t 3600
 # NB: The RSS limit (ulimit -m) is not supported by modern linux!
 
 PROJECT="$(realpath "$1")"  # resolve symlinks
-LEAN_ROOT="$(cd $1 && lean --print-prefix)"
-LEAN_PATH="$(cd $1 && lake env printenv LEAN_PATH)"
-LEAN_SRC_PATH=$(cd $1 && lake env printenv LEAN_SRC_PATH)
+LEAN_ROOT="$(cd $1 && lean --print-prefix)" ## Q: Why $1 and not $PROJECT
+LEAN_PATH="$(cd $1 && lake env printenv LEAN_PATH)" 
+LEAN_SRC_PATH=$(cd $1 && lake env printenv LEAN_SRC_PATH) ## Q: Why quoted and others aren't?
 GLIBC_PATH="$(nix-store --query "$(patchelf --print-interpreter "$LEAN_ROOT/bin/lean")")"
 
 # dynamically check for support for `-Dexperimental.module`

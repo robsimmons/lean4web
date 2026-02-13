@@ -1,5 +1,5 @@
 name = "Stable"
-defaultTargets = ["Stable"]
+defaultTargets = ["Stable", "TheLeanFile"]
 
 [leanOptions]
 pp.unicode.fun = true
@@ -11,3 +11,10 @@ rev = "v4.27.0"
 
 [[lean_lib]]
 name = "Stable"
+
+[[lean_lib]]
+name = "TheLeanFile"
+
+[[lean_exe]]
+name = "mkdoc"
+root = "Main"
