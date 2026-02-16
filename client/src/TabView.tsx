@@ -29,6 +29,7 @@ interface VersoPreviewProps {
   currentTab: TabId;
   isUsingMobile: boolean;
   code: string;
+  
 }
 
 function VersoPreview({ currentTab, isUsingMobile, code }: VersoPreviewProps) {
@@ -119,7 +120,7 @@ function TabView({ infoviewRef, isUsingCodeMirror, isUsingMobile, code }: TabVie
   const [tabId, setTabId] = useState<TabId>("info");
 
   return (
-    <div className="tab-view">
+    <div className="view-tabs-container">
       <div role="tablist" className="tab-list">
         <TabViewButton id="info" currentTab={tabId} setTabId={setTabId}>
           InfoView
