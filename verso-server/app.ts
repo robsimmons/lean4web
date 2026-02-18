@@ -9,17 +9,17 @@ export const app = express()
 app.use(express.json())
 
 /**
- * POST requests don't work naturally with browsers and server-sent events: 
- * the WebAPI-preferred way to handle SSE is with an `EventSource`, but 
+ * POST requests don't work naturally with browsers and server-sent events:
+ * the WebAPI-preferred way to handle SSE is with an `EventSource`, but
  * `EventSource` only initiates a GET request.
- * 
+ *
  * The way we deal with this is a protocol: first, the client initiates a
- * stream, and the server immediately sends a `connect` event that contains a 
+ * stream, and the server immediately sends a `connect` event that contains a
  * UUID payload. Then, POST requests that have `?stream=<uuid>` in their query
- * will attempt to send information about incremental completion to the 
+ * will attempt to send information about incremental completion to the
  * SSE stream associated with that UUID.
- * 
- * This also has the advantage of simplifying POST requests: the 
+ *
+ * This also has the advantage of simplifying POST requests: the
  * request/response behavior of POST requests is unchanged by SSE, which exist
  * in a side channel.
  */
@@ -35,15 +35,15 @@ app.get('/verso/api/stream', async (req, res) => {
 
   const id = randomUUID()
   trackingRequests[id] = res
+  console.log(`initializing server-sent event session for ${id}`)
   res.write('event: connect\n')
   res.write(`data: ${id}\n\n`)
-  console.log(`starting stream for ${id}`)
   req.on('close', () => {
-    console.log(`stream for ${id} ended with an error`)
+    console.log(`stream for ${id} ended with a 'close' event`)
     delete trackingRequests[id]
   })
   req.on('end', () => {
-    console.log(`stream for ${id} ended normally`)
+    console.log(`stream for ${id} ended with an 'end' event`)
     delete trackingRequests[id]
   })
 })
@@ -61,25 +61,25 @@ app.post('/verso/api/singlepage', async (req, res) => {
       console.log(`could not connect /verso/api/singlepage to ${id}`)
     }
   }
+
+  /** Report incremental progress to the SSE session */
   function sendProgress(obj: unknown) {
     if (id === null) return
     if (id in trackingRequests) {
       const txt = JSON.stringify(obj)
-      console.log(`to ${id}: ${txt}`)
       trackingRequests[id].write('data: ' + txt + '\n\n')
     }
   }
 
+  // Parse args
   const body = zBuildRequest.safeParse(req.body)
   if (!body.success) {
     res.status(400).send({ error: 'Poorly-formed request' })
     return
   }
-  const uniqueDirName = randomUUID()
-  const resultDir = join(OUTPUT_ROOT_DIR, uniqueDirName)
-  mkdir(resultDir)
-  const [resultPath, subprocess] = await compileVerso(body.data.projectId, body.data.fileContents)
 
+  // Run subcommand
+  const [resultPath, subprocess] = await compileVerso(body.data.projectId, body.data.fileContents)
   subprocess.stdout.on('data', (data) => {
     for (const line of `${data}`.trim().split('\n')) {
       sendProgress({ stream: 'stdout', contents: line })

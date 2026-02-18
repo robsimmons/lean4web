@@ -34,4 +34,4 @@ exec bwrap \
     --unshare-all  \
     --die-with-parent \
     --chdir /project \
-    /lean/bin/lake --keep-toolchain exe mkdoc
+    /lean/bin/lake --keep-toolchain build
