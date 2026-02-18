@@ -24,20 +24,21 @@ export async function compileVerso(
   const outputDir = join(OUTPUT_ROOT_DIR, outputDirName)
   await mkdir(outputDir)
   const projDir = join(PROJ_ROOT, projectId)
-  const theLeanFileLoc = join(projDir, 'MakeVerso', 'TheLeanFile.lean')
+  const theLeanFileLoc = join(projDir, 'TheLeanFile.lean')
   await mkdir(join(outputDir, '_out'))
   await writeFile(theLeanFileLoc, theLeanFileContents)
 
   if (IS_DEV) {
+    console.log("DEVELOPMENT WARNING: running lake without bubblewrap!")
     return [
       join(outputDirName, '_out'),
-      spawn('lake', ['build'], {
+      spawn('lake', ['--keep-toolchain', 'build'], {
         cwd: projDir,
         env: { ...process.env, VERSO_OUTPUT_PATH: join(outputDir, '_out') },
       }),
     ]
   } else {
-    const workDirName = randomUUID()
+    const workDirName = `${outputDirName}.workdir`
     const workDir = join(OUTPUT_ROOT_DIR, workDirName)
     await mkdir(workDir)
     return [

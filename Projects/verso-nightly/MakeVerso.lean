@@ -1,4 +1,4 @@
-import MakeVerso.TheLeanFile
+import TheLeanFile
 import Lean
 import Verso.Doc
 import VersoManual
@@ -9,9 +9,10 @@ open Lean Elab.Term
 #eval show TermElabM _ from do
   let env ← getEnv
 
-  match env.constants.find? (Verso.Doc.docName `MakeVerso.TheLeanFile) with
+  match env.constants.find? (Verso.Doc.docName `TheLeanFile) with
   | .none =>
-    throwError "Document does not contain a lean file"
+    throwError "The lean file provided does not contain a Verso document"
+
   | .some (.defnInfo doc) =>
     let destination := (← IO.getEnv "VERSO_OUTPUT_PATH").map (⟨·⟩)
       |>.getD ((← IO.currentDir).join "_out")
@@ -24,9 +25,11 @@ open Lean Elab.Term
       numErrs.set ((← numErrs.get) + 1)
     let renderConfig : Verso.Genre.Manual.RenderConfig := { destination }
 
-    -- We would like to run this, but it presumes that the identifier exists
+    -- We would like to write this:
     -- let part := TheLeanFile.«the canonical document object name»
-    -- Therefore, we run this instead:
+    -- But that presumes the identifier exists, and we want this file to
+    -- elaborate successfully even if the import does not contain the files
+    -- we expect it to. Therefore, we run this instead:
     let part ← Meta.evalExpr (Verso.Doc.VersoDoc Verso.Genre.Manual)
       (mkApp (mkConst ``Verso.Doc.VersoDoc [])
       (mkConst ``Verso.Genre.Manual []))
