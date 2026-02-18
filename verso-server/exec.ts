@@ -29,7 +29,7 @@ export async function compileVerso(
   await writeFile(theLeanFileLoc, theLeanFileContents)
 
   if (IS_DEV) {
-    console.log("DEVELOPMENT WARNING: running lake without bubblewrap!")
+    console.log('DEVELOPMENT WARNING: running lake without bubblewrap!')
     return [
       join(outputDirName, '_out'),
       spawn('lake', ['--keep-toolchain', 'build'], {
