@@ -8,6 +8,21 @@ import { compileVerso, OUTPUT_ROOT_DIR } from './exec.ts'
 export const app = express()
 app.use(express.json())
 
+/**
+ * POST requests don't work naturally with browsers and server-sent events: 
+ * the WebAPI-preferred way to handle SSE is with an `EventSource`, but 
+ * `EventSource` only initiates a GET request.
+ * 
+ * The way we deal with this is a protocol: first, the client initiates a
+ * stream, and the server immediately sends a `connect` event that contains a 
+ * UUID payload. Then, POST requests that have `?stream=<uuid>` in their query
+ * will attempt to send information about incremental completion to the 
+ * SSE stream associated with that UUID.
+ * 
+ * This also has the advantage of simplifying POST requests: the 
+ * request/response behavior of POST requests is unchanged by SSE, which exist
+ * in a side channel.
+ */
 const trackingRequests: { [id: string]: Response } = {}
 
 app.get('/verso/api/stream', async (req, res) => {

@@ -1,7 +1,7 @@
 name = "verso-nightly"
 version = "0.1.0"
 moreLeancArgs = ["-O0"]
-defaultTargets = ["TheLeanFile", "mkdoc"]
+defaultTargets = ["MakeVerso"]
 
 [[require]]
 name = "verso"
@@ -9,8 +9,5 @@ git = "https://github.com/leanprover/verso"
 rev = "nightly-testing"
 
 [[lean_lib]]
-name = "TheLeanFile"
+name = "MakeVerso"
 
-[[lean_exe]]
-name = "mkdoc"
-root = "Main"

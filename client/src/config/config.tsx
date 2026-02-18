@@ -23,7 +23,7 @@ const lean4webConfig : LeanWebConfig = {
       "name": "Verso Nightly",
       "plugins": [ "versobox" ],
       "examples": [
-        { "file": "TheLeanFile/VersoExample.lean",
+        { "file": "MakeVerso/VersoExample.lean",
           "name": "Verso document"
         }
       ]}
