@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -e
 ulimit -t 120
 
 # Resolve any symlinks in arguments
@@ -20,7 +21,7 @@ DIRNAME_PATH=$(dirname $(realpath $(which dirname)))
 LEAN_ROOT="$(cd $INPUT_DIR && lean --print-prefix)"
 
 echo "pre-bwrap $OUTPUT_DIR"
-exec bwrap \
+bwrap \
     --ro-bind /nix /nix \
     --ro-bind "$LEAN_ROOT" /lean \
     \
@@ -42,7 +43,7 @@ exec bwrap \
 echo "post-bwrap $OUTPUT_DIR"
 if [ -f "$OUTPUT_DIR/_out/.not-verso-doc" ]; then
     echo "Creating HTML render of Lean file"
-    exec bwrap \
+    bwrap \
         --ro-bind /nix /nix \
         --ro-bind "$LEAN_ROOT" /lean \
         \
@@ -60,7 +61,7 @@ if [ -f "$OUTPUT_DIR/_out/.not-verso-doc" ]; then
         --die-with-parent \
         --chdir /project \
         /lean/bin/lake build TheLeanFile:literate 
-    exec bwrap \
+    bwrap \
         --ro-bind /nix /nix \
         --ro-bind "$LEAN_ROOT" /lean \
         \
