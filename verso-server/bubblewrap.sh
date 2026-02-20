@@ -20,6 +20,7 @@ DIRNAME_PATH=$(dirname $(realpath $(which dirname)))
 # we'll bind this directory to `/lean`
 LEAN_ROOT="$(cd $INPUT_DIR && lean --print-prefix)"
 
+echo "pre-bwrap $OUTPUT_DIR"
 exec bwrap \
     --ro-bind /nix /nix \
     --ro-bind "$LEAN_ROOT" /lean \
@@ -39,7 +40,7 @@ exec bwrap \
     --chdir /project \
     /lean/bin/lake --keep-toolchain build
 
-echo "Checking contents of $OUTPUT_DIR"
+echo "post-bwrap $OUTPUT_DIR"
 if [ -f "$OUTPUT_DIR/_out/.not-verso-doc" ]; then
     echo "Creating HTML render of Lean file"
     exec bwrap \
