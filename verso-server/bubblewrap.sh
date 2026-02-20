@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 
-set -e
 ulimit -t 120
 
 # Resolve any symlinks in arguments

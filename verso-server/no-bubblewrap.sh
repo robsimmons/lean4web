@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
 set -e
-# No set-e, we always want the 
 ulimit -t 120
 
 # Resolve any symlinks in arguments
