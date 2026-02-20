@@ -2,10 +2,10 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, resolve } from 'node:path'
 
 const IS_DEV = process.env.NODE_ENV === 'development'
-const PROJ_ROOT = process.env.PROJ_ROOT || 'Projects'
+const PROJ_ROOT = resolve(process.env.PROJ_ROOT || './Projects');
 export const OUTPUT_ROOT_DIR = await mkdtemp(join(tmpdir(), 'verso-output-'))
 
 /**
@@ -24,22 +24,15 @@ export async function compileVerso(
   const outputDir = join(OUTPUT_ROOT_DIR, outputDirName)
   await mkdir(outputDir)
   const projDir = join(PROJ_ROOT, projectId)
-  const theLeanFileLoc = join(projDir, 'TheLeanFile.lean')
-  await mkdir(join(outputDir, '_out'))
+  const theLeanFileLoc = join(outputDir, 'TheLeanFile.lean')
   await writeFile(theLeanFileLoc, theLeanFileContents)
 
   if (IS_DEV) {
-    console.log('DEVELOPMENT WARNING: running lake without bubblewrap!')
-    try {
-      await unlink(join(PROJ_ROOT, projectId, '.lake', 'build', 'lib', 'lean', 'MakeVerso.olean'))
-    } catch (e) {
-      /* ignore */
-    }
+    console.log('DEVELOPMENT WARNING: running lake without bubblewrap!' + PROJ_ROOT+ '//' +projDir)
     return [
       join(outputDirName, '_out'),
-      spawn('lake', ['--keep-toolchain', 'build'], {
+      spawn(join(import.meta.dirname, 'no-bubblewrap.sh'), [projDir, theLeanFileLoc, outputDir], {
         cwd: projDir,
-        env: { ...process.env, VERSO_OUTPUT_PATH: join(outputDir, '_out') },
       }),
     ]
   } else {

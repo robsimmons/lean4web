@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 
+set -e
 ulimit -t 120
 
 # Resolve any symlinks in arguments
@@ -37,3 +38,44 @@ exec bwrap \
     --die-with-parent \
     --chdir /project \
     /lean/bin/lake --keep-toolchain build
+
+
+if [ -f "$OUTPUT_DIR/_out/.not-verso-doc" ]; then
+    echo "Creating HTML render of Lean file"
+    exec bwrap \
+        --ro-bind /nix /nix \
+        --ro-bind "$LEAN_ROOT" /lean \
+        \
+        --dev /dev	\
+        --tmpfs /tmp \
+        --proc /proc \
+        \
+        --clearenv \
+        --setenv PATH "$GIT_PATH:$DIRNAME_PATH" \
+        \
+        --overlay-src "$INPUT_DIR" \
+        --overlay "$OUTPUT_DIR" "$WORK_DIR" /project \
+        \
+        --unshare-all  \
+        --die-with-parent \
+        --chdir /project \
+        /lean/bin/lake build TheLeanFile:literate 
+    exec bwrap \
+        --ro-bind /nix /nix \
+        --ro-bind "$LEAN_ROOT" /lean \
+        \
+        --dev /dev	\
+        --tmpfs /tmp \
+        --proc /proc \
+        \
+        --clearenv \
+        --setenv PATH "$GIT_PATH:$DIRNAME_PATH" \
+        \
+        --overlay-src "$INPUT_DIR" \
+        --overlay "$OUTPUT_DIR" "$WORK_DIR" /project \
+        \
+        --unshare-all  \
+        --die-with-parent \
+        --chdir /project \
+        /lean/bin/lake exe verso-html .lake/build/literate _out/html-lit    
+fi

@@ -14,3 +14,7 @@ name = "TheLeanFile"
 [[lean_lib]]
 name = "MakeVerso"
 
+[[lean_exe]]
+name = "example"
+root = "Test"
+

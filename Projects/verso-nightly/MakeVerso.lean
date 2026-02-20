@@ -8,14 +8,16 @@ open Lean Elab.Term
 
 #eval show TermElabM _ from do
   let env ← getEnv
+  let destination := (← IO.getEnv "VERSO_OUTPUT_PATH").map (⟨·⟩)
+    |>.getD ((← IO.currentDir).join "_out")
+  Verso.FS.ensureDir destination
 
   match env.constants.find? (Verso.Doc.docName `TheLeanFile) with
   | .none =>
-    throwError "The lean file provided does not contain a Verso document"
+    logInfo s!"The lean file provided does not contain a Verso document"
+    IO.FS.writeFile (destination.join ".not-verso-doc") ""
 
   | .some (.defnInfo doc) =>
-    let destination := (← IO.getEnv "VERSO_OUTPUT_PATH").map (⟨·⟩)
-      |>.getD ((← IO.currentDir).join "_out")
     Verso.FS.ensureDir destination
 
     let extensionImpls := by exact extension_impls%

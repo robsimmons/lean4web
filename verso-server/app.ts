@@ -1,6 +1,6 @@
 import express, { type Response } from 'express'
 import { z } from 'zod'
-import { mkdir, mkdtemp } from 'node:fs/promises'
+import { mkdir, mkdtemp, lstat, stat, access, constants, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { compileVerso, OUTPUT_ROOT_DIR } from './exec.ts'
@@ -95,11 +95,21 @@ app.post('/verso/api/singlepage', async (req, res) => {
     finished = true
     res.send({ success: false, result: `${data}`.trim() })
   })
-  subprocess.on('close', (data) => {
+  subprocess.on('close', async (data) => {
     if (finished) return
     if (data === 0) {
-      sendProgress({ stream: 'stdout', contents: 'Finished successfully!' })
-      res.send({ success: true, href: `/verso/view/${resultPath}/html-single` })
+      console.log({ loc: OUTPUT_ROOT_DIR, resultPath })
+      sendProgress({ stream: 'stdout', contents: 'Finished...' })
+      const contents = await readdir(join(OUTPUT_ROOT_DIR, resultPath))
+      if (contents.includes('html-single')) {
+        sendProgress({ stream: 'stdout', contents: '...detected Verso html output' })
+        res.send({ success: true, href: `/verso/view/${resultPath}/html-single` })
+      } else if (contents.includes('html-lit')) {
+        sendProgress({ stream: 'stdout', contents: '...detected literate Lean html output' })
+        res.send({ success: true, href: `/verso/view/${resultPath}/html-lit/TheLeanFile` })
+      } else {
+        res.send({ success: false, result: 'no HTML output detected' })
+      }
     } else {
       res.send({ success: false, result: `process returned non-zero exit code ${data}` })
     }

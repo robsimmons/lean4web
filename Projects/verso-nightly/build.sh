@@ -5,4 +5,8 @@ cd $(dirname $0)
 curl -L https://raw.githubusercontent.com/leanprover/verso/nightly-testing/lean-toolchain -o lean-toolchain
 lake update -R
 lake build
-lake exe mkdoc --output /dev/null
+
+# Additional build steps for prepping literate Lean html output
+lake build TheLeanFile:literate
+lake exe verso-html .lake/build/literate _out
+rm -rf _out
