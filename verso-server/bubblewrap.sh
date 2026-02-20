@@ -39,7 +39,7 @@ exec bwrap \
     --chdir /project \
     /lean/bin/lake --keep-toolchain build
 
-
+echo "Checking contents of $OUTPUT_DIR"
 if [ -f "$OUTPUT_DIR/_out/.not-verso-doc" ]; then
     echo "Creating HTML render of Lean file"
     exec bwrap \
