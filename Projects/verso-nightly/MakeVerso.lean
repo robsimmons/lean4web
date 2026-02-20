@@ -14,7 +14,7 @@ open Lean Elab.Term
 
   match env.constants.find? (Verso.Doc.docName `TheLeanFile) with
   | .none =>
-    logInfo s!"The lean file provided does not contain a Verso document"
+    logInfo s!"Not a Verso doc!"
     IO.FS.writeFile (destination.join ".not-verso-doc") ""
 
   | .some (.defnInfo doc) =>
