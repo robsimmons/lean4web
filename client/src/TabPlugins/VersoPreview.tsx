@@ -1,74 +1,21 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { LeanWebPlugin } from '../config/docs'
-import { TabId } from '../TabView'
 
 interface VersoPreviewProps {
   currentTab: 'info' | LeanWebPlugin
-  code: string
-  projectId: string
+  id: string
+  workbenchMsg: any
 }
 
-function VersoPreview({ currentTab, code, projectId }: VersoPreviewProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [previewedCode, setPreviewedCode] = useState<null | string>(null)
-  const [hrefForIframe, setHrefForIframe] = useState<null | string>(null)
-  const [output, setOutput] = useState<string[]>([])
-  const scrollerRef = useRef<HTMLDivElement>(null)
+function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
+  const [state, setState] = useState<any>(null)
 
-  const loadCode = () => {
-    setIsLoading(true)
-    setOutput([])
-
-    const read = new EventSource('/verso/api/stream')
-    read.onerror = (x) => console.log({ error: x })
-    read.onmessage = ({ data }) => {
-      const line = JSON.parse(data)
-      setOutput((info) => [...info, line.contents])
+  useEffect(() => {
+    if (workbenchMsg?.event === 'buildHtml') {
+      console.log(`Verso preview updated, ${workbenchMsg.elapsed}ms`)
+      setState(workbenchMsg)
     }
-    read.addEventListener('connect', (event) => {
-      const streamId = event.data
-      setOutput((info) => [...info, 'connected!'])
-
-      fetch(`/verso/api/singlepage?stream=${streamId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ projectId: projectId, fileContents: code }),
-      })
-        .then((resp) => resp.json())
-        .then((json) => {
-          setIsLoading(false)
-          if (!json.success) {
-            setOutput((info) => [...info, json.result ?? 'Unexpected response from server.'])
-            console.error(json)
-            return
-          }
-          setHrefForIframe(json.href)
-          setPreviewedCode(code)
-        })
-        .catch((err) => {
-          setIsLoading(false)
-          setOutput((info) => [...info, 'Unexpected response from server.'])
-          console.error(err)
-        })
-        .finally(() => read.close())
-    })
-  }
-
-  const [lastTab, setLastTab] = useState<TabId | null>(null)
-  useEffect(() => {
-    if (lastTab && lastTab === currentTab) return
-    setLastTab(currentTab)
-    if (currentTab !== 'versobox') return
-    if (code === previewedCode) return
-    if (isLoading) return
-    loadCode()
-  }, [currentTab, lastTab])
-
-  useEffect(() => {
-    scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight
-  }, [output, hrefForIframe])
+  }, [workbenchMsg])
 
   return (
     <div
@@ -76,18 +23,8 @@ function VersoPreview({ currentTab, code, projectId }: VersoPreviewProps) {
       aria-labelledby="tab-preview"
       style={currentTab === 'versobox' ? {} : { display: 'none' }}
     >
-      <button disabled={isLoading} onClick={loadCode}>
-        {isLoading ? 'Loading...' : 'Load'}
-      </button>
-      <div
-        ref={scrollerRef}
-        style={{ overflow: 'scroll', width: '100%', height: '2.5em', flexGrow: 1 }}
-      >
-        <div style={{ width: 'max-content', height: 'max-content' }} className="versostatus">
-          {output.join('\n')}
-        </div>
-      </div>
-      {hrefForIframe && <iframe key={hrefForIframe} src={hrefForIframe} />}
+      {!state && 'waiting for server'}
+      {state && <iframe key={state.id} src={'/verso/view/' + id + '/html-single'} />}
     </div>
   )
 }

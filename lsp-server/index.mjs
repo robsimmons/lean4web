@@ -1,27 +1,31 @@
-import { WebSocketServer } from 'ws';
+import { WebSocketServer } from 'ws'
 import express from 'express'
-import * as cp from 'child_process';
-import * as url from 'url';
-import * as rpc from 'vscode-ws-jsonrpc';
+import * as cp from 'child_process'
+import * as url from 'url'
+import * as rpc from 'vscode-ws-jsonrpc'
 import * as path from 'path'
-import * as jsonrpcserver from 'vscode-ws-jsonrpc/server';
-import { stat } from 'fs/promises';
-import { env } from 'process';
+import * as jsonrpcserver from 'vscode-ws-jsonrpc/server'
+import { stat, mkdir, mkdtemp, unlink, writeFile } from 'fs/promises'
+import { randomUUID } from 'node:crypto'
+import { env } from 'process'
 import nocache from 'nocache'
 import anonymize from 'ip-anonymize'
 import os from 'os'
 import http from 'http'
 import https from 'https'
+import { createSession, getSession, OUTPUT_ROOT_DIR, sendToSession } from './outputdir.mjs'
 
 let socketCounter = 0
 
 function logStats() {
   console.log(`[${new Date()}] Number of open sockets - ${socketCounter}`)
-  console.log(`[${new Date()}] Free RAM - ${Math.round(os.freemem() / 1024 / 1024)} / ${Math.round(os.totalmem() / 1024 / 1024)} MB`)
+  console.log(
+    `[${new Date()}] Free RAM - ${Math.round(os.freemem() / 1024 / 1024)} / ${Math.round(os.totalmem() / 1024 / 1024)} MB`,
+  )
 }
 
-const __filename = url.fileURLToPath(import.meta.url);
-const __dirname = url.fileURLToPath(new URL('.', import.meta.url));
+const __filename = url.fileURLToPath(import.meta.url)
+const __dirname = url.fileURLToPath(new URL('.', import.meta.url))
 
 const environment = process.env.NODE_ENV
 const isGithubAction = process.env.GITHUB_ACTIONS
@@ -53,28 +57,32 @@ app.use('/api/toolchain/*', (req, res, next) => {
   // the nix setup has the files in ~/deploy/live
   express.static(path.join(os.homedir(), 'deploy', 'live', project))(req, res, next)
 })
+app.use('/api/session', (req, res) => {
+  void createSession(req, res)
+})
+app.use('/verso/view', express.static(OUTPUT_ROOT_DIR))
 // Using the client files
 app.use(express.static(path.join(__dirname, '..', 'client', 'dist')))
 app.use(nocache())
 
 let server
 if (crtFile && keyFile) {
-  var privateKey  = fs.readFileSync(keyFile, 'utf8');
-  var certificate = fs.readFileSync(crtFile, 'utf8');
-  var credentials = {key: privateKey, cert: certificate};
+  var privateKey = fs.readFileSync(keyFile, 'utf8')
+  var certificate = fs.readFileSync(crtFile, 'utf8')
+  var credentials = { key: privateKey, cert: certificate }
 
   const PORT = process.env.PORT ?? 443
-  server = https.createServer(credentials, app).listen(PORT,
-    () => console.log(`HTTPS on port ${PORT}`));
+  server = https
+    .createServer(credentials, app)
+    .listen(PORT, () => console.log(`HTTPS on port ${PORT}`))
 
   // redirect http to https
-  express().get('*', function(req, res) {
-    res.redirect('https://' + req.headers.host + req.url).listen(80);
+  express().get('*', function (req, res) {
+    res.redirect('https://' + req.headers.host + req.url).listen(80)
   })
 } else {
   const PORT = process.env.PORT ?? 8080
-  server = app.listen(PORT,
-    () => console.log(`HTTP on port ${PORT}`))
+  server = app.listen(PORT, () => console.log(`HTTP on port ${PORT}`))
 }
 
 const wss = new WebSocketServer({ server })
@@ -86,28 +94,33 @@ let projectsBasePath = env.LEAN4WEB_PROJECT_BASE_PATH ?? path.join(__dirname, '.
  * Attempts to start the server process, returning `null` in production if the
  * project does not exist.
  */
-async function startServerProcess(project) {
+async function startServerProcess(project, sessionId) {
   let projectPath = path.join(projectsBasePath, project)
   // Check for presence of directory
   try {
-    await stat(path.join(projectPath, "lean-toolchain"))
+    await stat(path.join(projectPath, 'lean-toolchain'))
   } catch (err) {
     console.log(`Could not find project (${projectPath})`)
-    return null;
+    return null
   }
+
+  let session = getSession(sessionId)
 
   let serverProcess
   if (isDevelopment) {
     if (!isGithubAction) {
-      console.warn("Running without Bubblewrap container!")
+      console.warn('Running without Bubblewrap container!')
     }
-    serverProcess = cp.spawn("lake", ["serve", "--"], { cwd: projectPath })
+    serverProcess = cp.spawn('lake', ['serve', '--'], {
+      cwd: projectPath,
+      env: { ...process.env, VERSO_OUTPUT_PATH: session?.mainDir },
+    })
   } else {
     // the nix setup runs the server in ~,
     // `bubblewrap.sh` is somewhere relative to the js source file
     // and the projects are in ~/deploy/live/<project>
-    let cmd = path.join (__dirname, "bubblewrap.sh");
-    let cmdArgs = [projectPath];
+    let cmd = path.join(__dirname, 'bubblewrap.sh')
+    let cmdArgs = [projectPath]
     console.info(`Running with Bubblewrap container: ${cmd} ${cmdArgs}.`)
     serverProcess = cp.spawn(cmd, cmdArgs, {})
   }
@@ -116,17 +129,13 @@ async function startServerProcess(project) {
   //   console.log(`Lean Server: ${data}`);
   // });
 
-  serverProcess.stderr.on('data', data =>
-    console.error(`Lean Server: ${data}`)
-  )
+  serverProcess.stderr.on('data', (data) => console.error(`Lean Server: ${data}`))
 
-  serverProcess.on('error', error =>
-    console.error(`Launching Lean Server failed: ${error}`)
-  )
+  serverProcess.on('error', (error) => console.error(`Launching Lean Server failed: ${error}`))
 
   serverProcess.on('close', (code) => {
-    console.log(`lean server exited with code ${code}`);
-  });
+    console.log(`lean server exited with code ${code}`)
+  })
 
   return serverProcess
 }
@@ -143,11 +152,11 @@ function urisToFilenames(prefix, obj) {
         obj[key] = path.join(prefix, obj[key])
       }
       if (typeof obj[key] === 'object' && obj[key] !== null) {
-        urisToFilenames(prefix, obj[key]);
+        urisToFilenames(prefix, obj[key])
       }
     }
   }
-  return obj;
+  return obj
 }
 
 /** Transform server file back into client URI */
@@ -158,36 +167,54 @@ function FilenamesToUri(prefix, obj) {
         obj[key] = obj[key].replace(prefix, '')
       }
       if (typeof obj[key] === 'object' && obj[key] !== null) {
-        FilenamesToUri(prefix, obj[key]);
+        FilenamesToUri(prefix, obj[key])
       }
     }
   }
-  return obj;
+  return obj
 }
 
-wss.addListener("connection", async function(ws, req) {
-  const urlRegEx = /^\/websocket\/([\w.-]+)$/
+wss.addListener('connection', async function (ws, req) {
+  const urlRegEx = /^\/websocket\/([\w.-]+)(\?id=([a-f0-9-]+))?$/
   const reRes = urlRegEx.exec(req.url)
-  if (!reRes) { console.error(`Connection refused because of invalid URL: ${req.url}`); return; }
+  if (!reRes) {
+    console.error(`Connection refused because of invalid URL: ${req.url}`)
+    return
+  }
   const project = reRes[1]
-  if (!project.match(/^[a-zA-Z][a-zA-Z1-9.-_]*/)) { console.error(`Connection refused because of invalid project name: ${project}`); return; }
+  const sessionId = reRes[3]
+  if (!project.match(/^[a-zA-Z][a-zA-Z1-9.-_]*/)) {
+    console.error(`Connection refused because of invalid project name: ${project}`)
+    return
+  }
 
   const ip = anonymize(req.headers['x-forwarded-for'] || req.socket.remoteAddress)
-  const ps = await startServerProcess(project)
-  if (ps === null) { console.error(`Connection refused because of nonexistent project directory: ${project}`); return; }
+  const ps = await startServerProcess(project, sessionId)
+  if (ps === null) {
+    console.error(`Connection refused because of nonexistent project directory: ${project}`)
+    return
+  }
 
   const socket = {
-      onMessage: (cb) => { ws.on("message", cb) },
-      onError: (cb) => { ws.on("error", cb) },
-      onClose: (cb) => { ws.on("close", cb) },
-      send: (data, cb) => { ws.send(data,cb) }
+    onMessage: (cb) => {
+      ws.on('message', cb)
+    },
+    onError: (cb) => {
+      ws.on('error', cb)
+    },
+    onClose: (cb) => {
+      ws.on('close', cb)
+    },
+    send: (data, cb) => {
+      ws.send(data, cb)
+    },
   }
   const reader = new rpc.WebSocketMessageReader(socket)
   const writer = new rpc.WebSocketMessageWriter(socket)
   const socketConnection = jsonrpcserver.createConnection(reader, writer, () => ws.close())
   const serverConnection = jsonrpcserver.createProcessStreamConnection(ps)
-  socketConnection.forward(serverConnection, message => {
-    const prefix = isDevelopment ? projectsBasePath : ""
+  socketConnection.forward(serverConnection, (message) => {
+    const prefix = isDevelopment ? projectsBasePath : ''
 
     if (!message.method === 'textDocument/definition') {
       urisToFilenames(prefix, message)
@@ -196,16 +223,40 @@ wss.addListener("connection", async function(ws, req) {
     if (isDevelopment && !isGithubAction) {
       console.log(`CLIENT: ${JSON.stringify(message)}`)
     }
-    return message;
+    return message
   })
-  serverConnection.forward(socketConnection, message => {
-    const prefix = isDevelopment ? projectsBasePath : ""
+  serverConnection.forward(socketConnection, (message) => {
+    const prefix = isDevelopment ? projectsBasePath : ''
     FilenamesToUri(prefix, message)
+
+    if (message.params?.diagnostics) {
+      message.params.diagnostics = message.params.diagnostics.flatMap((diag) => {
+        if (diag?.message?.startsWith('__WORKBENCH__ ')) {
+          const json = diag.message.substring(14)
+          if (sessionId) {
+            console.log(`BENCH ${sessionId}: ${json}`)
+          }
+          sendToSession(sessionId, json)
+          return []
+        } else {
+          return [diag]
+        }
+      })
+    }
+
+    if (message.result?.flatMap) {
+      message.result = message.result.flatMap((res) => {
+        if (res.message?.tag?.some((elem) => elem.expr?.text?.startsWith('__WORKBENCH__ ')))
+          return []
+        return [res]
+      })
+    }
+
     if (isDevelopment && !isGithubAction) {
       console.log(`SERVER: ${JSON.stringify(message)}`)
     }
-    return message;
-  });
+    return message
+  })
 
   ws.on('close', () => {
     socketCounter -= 1

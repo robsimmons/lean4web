@@ -22,7 +22,6 @@ import { useWindowDimensions } from './utils/WindowWidth'
 import './css/App.css'
 import './css/Editor.css'
 import TabView from './TabView'
-import { LeanWebPlugin } from './config/docs'
 
 /** Returns true if the browser wants dark mode */
 function isBrowserDefaultDark() {
@@ -37,6 +36,8 @@ function App() {
   const [leanMonaco, setLeanMonaco] = useState<LeanMonaco>()
   const [loaded, setLoaded] = useState<boolean>(false)
   const [preferences, setPreferences] = useState<IPreferencesContext>(defaultSettings)
+  const [session, setSession] = useState<null | string>(null);
+  const [workbenchMsg, setWorkbenchMsg] = useState<any>(null);
   const { width } = useWindowDimensions()
 
   // Lean4monaco options
@@ -63,6 +64,20 @@ function App() {
     editor?.getModel()?.setValue(code)
     setCode(code)
   }
+
+  useEffect(() => {
+    const read = new EventSource('/api/session')
+    read.onerror = (err) => console.error('Error with session EventSource', err)
+    read.addEventListener('connect', event => {
+      setSession(event.data)
+    })
+    read.onmessage = ({ data }) => {
+      setWorkbenchMsg({...JSON.parse(data), id: crypto.randomUUID()})
+    }
+    return () => {
+      read.close()
+    }
+  }, [])
 
   // Read the URL arguments
   useEffect(() => {
@@ -152,11 +167,11 @@ function App() {
 
   // Update LeanMonaco options when preferences are loaded or change
   useEffect(() => {
-    if (!project) { return }
+    if (!project || !session) { return }
     console.log('[Lean4web] Update lean4monaco options')
 
     var socketUrl = ((window.location.protocol === "https:") ? "wss://" : "ws://") +
-      window.location.host + "/websocket/" + project
+      window.location.host + "/websocket/" + project + "?id=" + session
     console.log(`[Lean4web] Socket url is ${socketUrl}`)
     var _options: LeanMonacoOptions = {
       websocket: {url: socketUrl},
@@ -184,7 +199,7 @@ function App() {
       }
     }
     setOptions(_options)
-  }, [editorRef, project, preferences])
+  }, [session, editorRef, project, preferences])
 
   // Setting up the editor and infoview
   useEffect(() => {
@@ -449,6 +464,8 @@ function App() {
             projectId={project}
             tab={tab}
             setTab={setTab}
+            workbenchMsg={workbenchMsg}
+            sessionId={session}
           />
         </div>
       </Split>
