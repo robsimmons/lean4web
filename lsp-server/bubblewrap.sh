@@ -42,7 +42,7 @@ if true; then
     --setenv LAKE "/no" `# tries to invoke git otherwise` \
     --setenv LEAN_PATH "$LEAN_PATH" \
     --setenv LEAN_SRC_PATH "$LEAN_SRC_PATH" \
-    --setenv VERSO_OUTPUT_PATH /verso/out
+    --setenv VERSO_OUTPUT_PATH /verso/out \
     --unshare-user \
     --unshare-pid  \
     --unshare-net  \
