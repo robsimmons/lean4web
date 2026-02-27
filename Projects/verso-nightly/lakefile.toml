@@ -5,7 +5,8 @@ defaultTargets = ["TheLeanFile", "MakeVerso"]
 
 [[require]]
 name = "verso"
-path = "../../../verso"
+git = "https://github.com/leanprover/verso"
+rev = "html-handler"
 
 [[lean_lib]]
 name = "TheLeanFile"

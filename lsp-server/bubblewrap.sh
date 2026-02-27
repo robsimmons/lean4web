@@ -5,6 +5,7 @@ ulimit -t 3600
 # NB: The RSS limit (ulimit -m) is not supported by modern linux!
 
 PROJECT="$(realpath "$1")"  # resolve symlinks
+OUTPUT_DIR="$(realpath "2")"
 LEAN_ROOT="$(cd $1 && lean --print-prefix)"
 LEAN_PATH="$(cd $1 && lake env printenv LEAN_PATH)"
 LEAN_SRC_PATH=$(cd $1 && lake env printenv LEAN_SRC_PATH)
@@ -28,6 +29,7 @@ if true; then
     --ro-bind /usr /usr \
     --ro-bind /etc/localtime /etc/localtime \
     --ro-bind $(readlink -f /etc/zoneinfo) $(readlink -f /etc/zoneinfo) \
+    --rw-bind "$OUTPUT_DIR" /verso/out
     --dev /dev \
     --tmpfs /tmp \
     --proc /proc \
@@ -40,6 +42,7 @@ if true; then
     --setenv LAKE "/no" `# tries to invoke git otherwise` \
     --setenv LEAN_PATH "$LEAN_PATH" \
     --setenv LEAN_SRC_PATH "$LEAN_SRC_PATH" \
+    --setenv VERSO_OUTPUT_PATH /verso/out
     --unshare-user \
     --unshare-pid  \
     --unshare-net  \

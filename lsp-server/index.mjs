@@ -118,7 +118,7 @@ async function startServerProcess(project, sessionId) {
     // `bubblewrap.sh` is somewhere relative to the js source file
     // and the projects are in ~/deploy/live/<project>
     let cmd = path.join (__dirname, "bubblewrap.sh");
-    let cmdArgs = [projectPath];
+    let cmdArgs = [projectPath].concat(session ? [session.mainDir] : []) ;
     console.info(`Running with Bubblewrap container: ${cmd} ${cmdArgs}.`)
     serverProcess = cp.spawn(cmd, cmdArgs, {})
   }

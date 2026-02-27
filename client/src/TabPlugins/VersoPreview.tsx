@@ -24,7 +24,19 @@ function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
       style={currentTab === 'versobox' ? {} : { display: 'none' }}
     >
       {!state && 'waiting for server'}
-      {state && <iframe key={state.id} src={'/verso/view/' + id + '/html-single'} />}
+      {state && state.errors.length === 0 && (
+        <iframe key={state.id} src={'/verso/view/' + id + '/html-single'} />
+      )}
+      {state && state.errors.length > 0 && (
+        <div>
+          Error{state.errors.length === 1 ? '' : 's'} encountered rendering to HTML:
+          <ul>
+            {state.errors.map((err, i) => (
+              <li key={i}>{err}</li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   )
 }
