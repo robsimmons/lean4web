@@ -44,7 +44,6 @@ async function closeSession(id) {
  * Set up a "workbench" session for a specific connection
  */
 export async function createSession(request, response) {
-  console.log({ request, response })
   // Set up headers for server-sent events
   response.setHeader('Cache-Control', 'no-cache')
   response.setHeader('Content-Type', 'text/event-stream')
