@@ -29,7 +29,7 @@ if true; then
     --ro-bind /usr /usr \
     --ro-bind /etc/localtime /etc/localtime \
     --ro-bind $(readlink -f /etc/zoneinfo) $(readlink -f /etc/zoneinfo) \
-    --rw-bind "$OUTPUT_DIR" /verso/out
+    --bind "$OUTPUT_DIR" /verso/out
     --dev /dev \
     --tmpfs /tmp \
     --proc /proc \
