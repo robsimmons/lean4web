@@ -21,7 +21,7 @@ export async function compileVerso(
   theLeanFileContents: string,
 ): Promise<[string, ChildProcessWithoutNullStreams]> {
   const outputDirName = randomUUID()
-  const outputDir = path.join(OUTPUT_ROOT_DIR, outputDirName)
+  const outputDir = join(OUTPUT_ROOT_DIR, outputDirName)
   await mkdir(outputDir)
   const projDir = join(PROJ_ROOT, projectId)
   const theLeanFileLoc = join(projDir, 'TheLeanFile.lean')
