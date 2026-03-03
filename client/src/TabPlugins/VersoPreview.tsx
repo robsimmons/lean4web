@@ -23,7 +23,7 @@ function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
       aria-labelledby="tab-preview"
       style={currentTab === 'versobox' ? {} : { display: 'none' }}
     >
-      {!state && 'waiting for server'}
+      {!state && 'waiting for a Verso document to be fully loaded'}
       {state && state.errors.length === 0 && (
         <iframe key={state.id} src={'/verso/view/' + id + '/html-single'} />
       )}
