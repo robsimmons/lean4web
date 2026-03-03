@@ -25,7 +25,7 @@ function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
     >
       {!state && 'waiting for a Verso document to be fully loaded'}
       {state && state.errors.length === 0 && (
-        <iframe key={state.id} src={'/verso/view/' + id + '/html-single'} />
+        <iframe style={{backgroundColor: "white"}} key={state.id} src={'/verso/view/' + id + '/html-single'} />
       )}
       {state && state.errors.length > 0 && (
         <div>

@@ -15,16 +15,22 @@
 
 .tab-button {
   border: 0;
-  background-color: rgb(200, 200, 200);
   padding-inline: 1em;
   padding-block: 0.5em;
+  border-right: 1px solid;
+  border-color: var(--vscode-tab-border);
 }
 
 .tab-button.tab-active {
-  background-color: white;
+  background-color: var(--vscode-tab-activeBackground);
+  color: var(--vscode-tab-activeForeground);
+  border-top: 1px solid;
+  border-top-color: var(--vscode-tab-activeModifiedBorder);
 }
 
 .tab-button.tab-not-active {
+  background-color: var(--vscode-tab-inactiveBackground);
+  color: var(--vscode-tab-inactiveForeground);
   cursor: pointer;
 }
 
@@ -49,12 +55,4 @@
   width: 100%;
   height: 100%;
   border: 0;
-  border-top: 1px solid rgb(200, 200, 200);
-}
-
-.versostatus {
-  width: 'max-content';
-  font-family: 'JuliaMono', 'Noto Color Emoji', Menlo, Monaco, 'Courier New', monospace;
-  font-size: 7pt;
-  white-space: pre;
 }

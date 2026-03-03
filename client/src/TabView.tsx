@@ -101,8 +101,8 @@ function TabView({
         <div
           style={{
             flexGrow: 1,
-            borderLeft: '1px solid rgb(200,200,200)',
-            borderBottom: '1px solid rgb(200,200,200)',
+            borderLeft: '1px solid var(--vscode-tab-border)',
+            borderBottom: '1px solid var(--vscode-tab-border)',
           }}
         />
       </div>
