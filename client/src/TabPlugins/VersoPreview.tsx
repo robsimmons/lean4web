@@ -22,12 +22,13 @@ function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
     if (workbenchMsg?.event === 'buildHtml') {
       console.log(`Verso preview updated, ${workbenchMsg.elapsed}ms`)
       setState(workbenchMsg)
-      console.log(ref.current?.contentWindow.location.pathname)
-      if (ref.current?.contentWindow.location.pathname === INITIAL_HREF) {
-        ref.current?.contentWindow.location.replace('/verso/view/' + id + '/html-single/')
-      }
       if (workbenchMsg.errors.length === 0) {
-        ref.current?.contentWindow.location.reload()
+        // First time through, switch to the preview url, subsequently reload
+        if (ref.current?.contentWindow.location.pathname === INITIAL_HREF) {
+          ref.current?.contentWindow.location.replace('/verso/view/' + id + '/html-single/')
+        } else if (workbenchMsg.errors.length === 0) {
+          ref.current?.contentWindow.location.reload()
+        }
       }
     }
   }, [workbenchMsg])
@@ -49,7 +50,8 @@ function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
           </ul>
         </div>
       )}
-      {/* The iframe is always present, but we { display: none } it when another element is shown */
+      {
+        /* The iframe is always present, but we { display: none } it when another element is shown */
         <iframe
           ref={ref}
           style={
