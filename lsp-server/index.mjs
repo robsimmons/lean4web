@@ -58,6 +58,10 @@ app.use('/api/toolchain/*', (req, res, next) => {
 app.use('/api/session', (req, res) => {
   void createSession(req, res)
 })
+// Placeholder endpoint to give verso output view an empty document to display
+app.get('/verso', (_req, res) => {
+  res.send('')
+})
 app.use('/verso/view', express.static(OUTPUT_ROOT_DIR))
 // Using the client files
 app.use(express.static(path.join(__dirname, '..', 'client', 'dist')))
