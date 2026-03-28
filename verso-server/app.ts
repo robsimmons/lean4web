@@ -1,9 +1,9 @@
 import express, { type Response } from 'express'
 import { z } from 'zod'
-import { mkdir, mkdtemp } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { compileVerso, OUTPUT_ROOT_DIR } from './exec.ts'
+import { compileLiterateHtml, OUTPUT_ROOT_DIR } from './exec.ts'
 
 export const app = express()
 app.use(express.json())
@@ -76,10 +76,13 @@ app.post('/verso/api/singlepage', async (req, res) => {
   if (!body.success) {
     res.status(400).send({ error: 'Poorly-formed request' })
     return
-  }
+  } 
 
   // Run subcommand
-  const [resultPath, subprocess] = await compileVerso(body.data.projectId, body.data.fileContents)
+  const [resultPath, subprocess] = await compileLiterateHtml(
+    body.data.projectId,
+    body.data.fileContents,
+  )
   subprocess.stdout.on('data', (data) => {
     for (const line of `${data}`.trim().split('\n')) {
       sendProgress({ stream: 'stdout', contents: line })
@@ -99,7 +102,7 @@ app.post('/verso/api/singlepage', async (req, res) => {
     if (finished) return
     if (data === 0) {
       sendProgress({ stream: 'stdout', contents: 'Finished successfully!' })
-      res.send({ success: true, href: `/verso/view/${resultPath}/html-single` })
+      res.send({ success: true, href: `/verso/view/${resultPath}/` })
     } else {
       res.send({ success: false, result: `process returned non-zero exit code ${data}` })
     }
