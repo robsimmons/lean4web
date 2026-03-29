@@ -25,7 +25,7 @@ app.use(express.json())
  */
 const trackingRequests: { [id: string]: Response } = {}
 
-app.get('/verso/api/stream', async (req, res) => {
+app.get('/literateHtml/api/stream', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -52,13 +52,13 @@ const zBuildRequest = z.object({
   projectId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9.-]*$/),
   fileContents: z.string(),
 })
-app.post('/verso/api/singlepage', async (req, res) => {
+app.post('/literateHtml/api/singlepage', async (req, res) => {
   const id: string | null = req.query.stream ? `${req.query.stream}` : null
   if (id) {
     if (id in trackingRequests) {
-      console.log(`connected /verso/api/singlepage to ${id}`)
+      console.log(`connected /literateHtml/api/singlepage to ${id}`)
     } else {
-      console.log(`could not connect /verso/api/singlepage to ${id}`)
+      console.log(`could not connect /literateHtml/api/singlepage to ${id}`)
     }
   }
 
@@ -102,7 +102,7 @@ app.post('/verso/api/singlepage', async (req, res) => {
     if (finished) return
     if (data === 0) {
       sendProgress({ stream: 'stdout', contents: 'Finished successfully!' })
-      res.send({ success: true, href: `/verso/view/${resultPath}/` })
+      res.send({ success: true, href: `/literateHtml/view/${resultPath}/` })
     } else {
       res.send({ success: false, result: `process returned non-zero exit code ${data}` })
     }
@@ -110,4 +110,4 @@ app.post('/verso/api/singlepage', async (req, res) => {
 })
 
 console.log(`Serving static files from ${OUTPUT_ROOT_DIR}`)
-app.use('/verso/view', express.static(OUTPUT_ROOT_DIR))
+app.use('/literateHtml/view', express.static(OUTPUT_ROOT_DIR))
