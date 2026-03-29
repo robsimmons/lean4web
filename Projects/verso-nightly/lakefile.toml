@@ -3,9 +3,6 @@ version = "0.1.0"
 moreLeancArgs = ["-O0"]
 defaultTargets = ["TheLeanFile"]
 
-[leanOptions]
-doc.verso = true
-
 [[require]]
 name = "verso"
 git = "https://github.com/leanprover/verso"
