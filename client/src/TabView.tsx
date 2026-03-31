@@ -113,7 +113,7 @@ function TabView({
           currentTab={tabId}
         />
         {tabs.includes('versobox') && (
-          <VersoPreview id={sessionId} currentTab={tabId} workbenchMsg={workbenchMsg} />
+          <VersoPreview code={code} id={sessionId} currentTab={tabId} workbenchMsg={workbenchMsg} />
         )}
       </div>
     </div>

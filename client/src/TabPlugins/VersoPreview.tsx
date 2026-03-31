@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import { LeanWebPlugin } from '../config/docs'
+import LiterateHtmlPreview from './LiterateHtmlPreview'
 
 interface VersoPreviewProps {
   currentTab: 'info' | LeanWebPlugin
   id: string
   workbenchMsg: any
+  code: string
 }
 
 /**
@@ -14,9 +16,11 @@ interface VersoPreviewProps {
  */
 const INITIAL_HREF = '/verso/'
 
-function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
+function VersoPreview({ id, currentTab, workbenchMsg, code }: VersoPreviewProps) {
   const [state, setState] = useState<any>(null)
   const ref = useRef<null | HTMLIFrameElement>(null)
+
+  const showVersoDoc = code.split('\n').some((str) => str.startsWith('#doc '))
 
   useEffect(() => {
     if (workbenchMsg?.event === 'buildHtml') {
@@ -32,6 +36,8 @@ function VersoPreview({ id, currentTab, workbenchMsg }: VersoPreviewProps) {
       }
     }
   }, [workbenchMsg])
+
+  if (!showVersoDoc) return <LiterateHtmlPreview code={code} currentTab={currentTab} />
 
   return (
     <div

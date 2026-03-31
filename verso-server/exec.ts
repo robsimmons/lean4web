@@ -41,8 +41,20 @@ export async function compileLiterateHtml(
     } catch (e) {
       /* ignore */
     }
+    try {
+      await unlink(join(PROJ_ROOT, projectId, '.lake', 'build', 'lib', 'lean', 'TheLeanFile.olean'))
+      await unlink(
+        join(PROJ_ROOT, projectId, '.lake', 'build', 'lib', 'lean', 'TheLeanFile.olean.hash'),
+      )
+      await unlink(join(PROJ_ROOT, projectId, '.lake', 'build', 'lib', 'lean', 'TheLeanFile.trace'))
+    } catch (e) {
+      /* ignore */
+    }
     await symlink(outputSubDir, join(PROJ_ROOT, projectId, '.lake', 'build', 'literate-html'))
-    return [join(outputDirName, '.lake', 'build', 'literate-html'), spawn('lake', ['build', ':literateHtml'], { cwd: projDir })]
+    return [
+      join(outputDirName, '.lake', 'build', 'literate-html'),
+      spawn('lake', ['build', ':literateHtml'], { cwd: projDir }),
+    ]
   } else {
     const workDirName = `${outputDirName}.workdir`
     const workDir = join(OUTPUT_ROOT_DIR, workDirName)
