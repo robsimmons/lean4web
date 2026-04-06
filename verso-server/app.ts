@@ -64,6 +64,7 @@ app.post('/literateHtml/api/singlepage', async (req, res) => {
 
   /** Report incremental progress to the SSE session */
   function sendProgress(obj: unknown) {
+    console.log(obj)
     if (id === null) return
     if (id in trackingRequests) {
       const txt = JSON.stringify(obj)

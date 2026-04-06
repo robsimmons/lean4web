@@ -11,7 +11,7 @@ cd $(dirname $0)
 
 # currently the mathlib post-update-hook is not good enough to update the lean-toolchain.
 # things break if the new lakefile is not valid in the old lean version
-curl -L https://raw.githubusercontent.com/leanprover-community/mathlib4/master/lean-toolchain -o lean-toolchain
+# curl -L https://raw.githubusercontent.com/leanprover-community/mathlib4/master/lean-toolchain -o lean-toolchain
 
 # note: mathlib has now a post-update hook that modifies the `lean-toolchain`
 # and calls `lake exe cache get`.
@@ -19,3 +19,4 @@ curl -L https://raw.githubusercontent.com/leanprover-community/mathlib4/master/l
 lake update -R
 lake build
 lake build Batteries
+lake exe mkdoc --output /dev/null

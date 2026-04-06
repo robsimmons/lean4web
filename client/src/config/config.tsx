@@ -3,7 +3,8 @@ import { LeanWebConfig } from './docs' // look here for documentation of the ind
 const lean4webConfig : LeanWebConfig = {
   "projects": [
     { "folder": "MathlibDemo",
-      "name": "Latest Mathlib",
+      "name": "Stable Mathlib",
+      "plugins": [ "versobox" ],
       "examples": [
         { "file": "MathlibDemo/Bijection.lean",
           "name": "Bijection" },
@@ -12,21 +13,9 @@ const lean4webConfig : LeanWebConfig = {
         { "file": "MathlibDemo/Ring.lean",
           "name": "Ring" },
         { "file": "MathlibDemo/Rational.lean",
-          "name": "Rational" }]},
-    { "folder": "mathlib-stable",
-      "name": "Mathlib stable"},
-    { "folder": "mathlib-v4.24.0",
-      "name": "Mathlib v4.24.0"},
-    { "folder": "lean-nightly",
-      "name": "Lean Nightly (without mathlib)"},
-    { "folder": "verso-nightly",
-      "name": "Verso Nightly",
-      "plugins": [ "versobox" ],
-      "examples": [
+          "name": "Rational" },
         { "file": "MakeVerso/VersoExample.lean",
-          "name": "Verso document"
-        }
-      ]}
+          "name": "Verso document" }]},
   ],
   "serverCountry": 'Finland',
   "contactDetails": null,

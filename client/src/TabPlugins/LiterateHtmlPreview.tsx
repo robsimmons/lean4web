@@ -19,7 +19,7 @@ function request(code: string, callback: (resp: any) => void) {
     fetch('/literateHtml/api/singlepage', {
       method: 'POST',
       headers,
-      body: JSON.stringify({ projectId: 'verso-nightly', fileContents: code }),
+      body: JSON.stringify({ projectId: 'MathlibDemo', fileContents: code }),
     })
       .then((response) => response.json())
       .then((result) => {
