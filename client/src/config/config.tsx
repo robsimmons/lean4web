@@ -16,6 +16,8 @@ const lean4webConfig : LeanWebConfig = {
           "name": "Rational" },
         { "file": "MakeVerso/VersoExample.lean",
           "name": "Verso document" }]},
+    { "folder": "lean-nightly",
+      "name": "Lean Nightly (without mathlib)"},
   ],
   "serverCountry": 'Finland',
   "contactDetails": null,
