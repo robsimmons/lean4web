@@ -14,7 +14,7 @@ const lean4webConfig : LeanWebConfig = {
           "name": "Ring" },
         { "file": "MathlibDemo/Rational.lean",
           "name": "Rational" },
-        { "file": "MakeVerso/VersoExample.lean",
+        { "file": "MathlibDemo/VersoExample.lean",
           "name": "Verso document" }]},
     { "folder": "lean-nightly",
       "name": "Lean Nightly (without mathlib)"},
