@@ -16,6 +16,17 @@ name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
 rev = "v4.29.0"
 
+# Used for compybox demo
+[[require]]
+name = "lean4export"
+scope = "leanprover"
+rev = "v4.29.0"
+
+# Used for compybox demo
+[[require]]
+name = "ModuleConstants"
+path = "./ModuleConstants"
+
 [[lean_lib]]
 name = "MathlibDemo"
 
