@@ -32,3 +32,9 @@ name = "MathlibDemo"
 
 [[lean_lib]]
 name = "TheLeanFile"
+
+[[lean_lib]]
+name = "Challenge"
+
+[[lean_lib]]
+name = "Solution"
