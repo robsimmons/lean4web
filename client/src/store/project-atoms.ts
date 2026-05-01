@@ -8,7 +8,43 @@ const projectsQueryAtom = atomWithQuery<LeanWebProject[]>(() => ({
   queryKey: ['projects'],
   queryFn: async () => {
     const res = await fetch(`/api/projects`)
-    return res.json()
+    return [
+      {
+        folder: 'MathlibDemo',
+        config: {
+          name: 'Latest Mathlib',
+          hidden: false,
+          default: true,
+          examples: [
+            { file: 'MathlibDemo/Bijection.lean', name: 'Bijection' },
+            { file: 'MathlibDemo/Logic.lean', name: 'Logic' },
+            { file: 'MathlibDemo/Ring.lean', name: 'Ring' },
+            { file: 'MathlibDemo/Rational.lean', name: 'Rational' },
+          ],
+        },
+      },
+      {
+        folder: 'lean-nightly',
+        config: {
+          name: 'Lean nightly (without mathlib)',
+          hidden: false,
+          default: false,
+          examples: [],
+        },
+      },
+      {
+        folder: 'mathlib-stable',
+        config: { name: 'Stable (Mathlib + CSLib)', hidden: false, default: false, examples: [] },
+      },
+      {
+        folder: 'mathlib-v4.24.0',
+        config: { name: 'Mathlib v4.24.0', hidden: true, default: false, examples: [] },
+      },
+      {
+        folder: 'mathlib-v4.28.0',
+        config: { name: 'Mathlib v4.28.0', hidden: false, default: false, examples: [] },
+      },
+    ]
   },
 }))
 

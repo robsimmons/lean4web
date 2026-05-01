@@ -1,7 +1,13 @@
 import '../css/Modal.css'
 import '../css/Navigation.css'
 
-import { faArrowRotateRight, faCode, faInfoCircle, faEye } from '@fortawesome/free-solid-svg-icons'
+import {
+  faArrowRotateRight,
+  faCode,
+  faEye,
+  faHandshakeSimple,
+  faInfoCircle,
+} from '@fortawesome/free-solid-svg-icons'
 import {
   faArrowUpRightFromSquare,
   faBars,
@@ -20,6 +26,7 @@ import { ChangeEvent, Dispatch, SetStateAction, useState } from 'react'
 
 import { lean4webConfig } from '../../config'
 import ZulipIcon from '../assets/zulip.svg'
+import { useNavBar } from '../context/NavBarContext'
 import { codeAtom } from '../editor/code-atoms'
 import ImpressumPopup from '../Popups/Impressum'
 import LoadUrlPopup from '../Popups/LoadUrl'
@@ -33,8 +40,6 @@ import { currentProjectAtom, projectsAtom, visibleProjectsAtom } from '../store/
 import { save } from '../utils/SaveToFile'
 import { Dropdown } from './Dropdown'
 import { NavButton } from './NavButton'
-
-import { useNavBar } from '../context/NavBarContext'
 
 /** The menu items either appearing inside the dropdown or outside */
 function FlexibleMenu({
@@ -72,6 +77,7 @@ function FlexibleMenu({
     // Manually close the menu as we prevent it closing below.
     setOpenLoad(false)
   }
+  const [openWarning, setOpenWarning] = useState(true)
 
   return (
     <>
@@ -141,6 +147,61 @@ function FlexibleMenu({
           }}
         />
       </Dropdown>
+      <NavButton
+        icon={faHandshakeSimple}
+        text="Can I Trust This Proof?"
+        onClick={() => {
+          window.location.assign('https://compybox2.onrender.com/' + window.location.hash)
+        }}
+      />
+      <div style={{ position: 'relative', display: openWarning ? 'inline' : 'none' }}>
+        <div style={{ position: 'absolute', top: '100%', right: 0, zIndex: 4, paddingTop: 20 }}>
+          <div
+            style={{
+              width: 280,
+              backgroundColor: 'pink',
+              borderRadius: '1em',
+              padding: '1em',
+              display: 'relative',
+              border: '2px solid red',
+              fontSize: '90%',
+              color: 'black',
+            }}
+          >
+            <div style={{ width: '2em', height: '2em', float: 'right' }} />
+            <p style={{ marginTop: 0 }}>
+              <strong>Warning:</strong> don't trust proofs from untrusted sources unless they are
+              validated against a trusted challenge.
+            </p>
+            <p style={{ marginBottom: 0 }}>
+              Click here to go to comparator.live-lean.org and validate this proof.
+            </p>
+            <button
+              style={{
+                position: 'absolute',
+                right: 0,
+                top: 20,
+                padding: '1em',
+                backgroundColor: 'transparent',
+                cursor: 'pointer',
+                border: 'none',
+              }}
+              onClick={() => setOpenWarning(false)}
+            >
+              <FontAwesomeIcon size="xl" icon={faXmark} />
+            </button>
+            <svg
+              style={{ position: 'absolute', right: 0, top: 0 , overflow: "visible"}}
+              viewBox="0 0 100 23"
+              height="23"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <polygon points="23,23 0,0 46,23" fill="pink" />
+              <polyline points="0,21 21,21 0,0 42,21 50,21" fill="none" stroke="red" stroke-width="2" />
+            </svg>
+          </div>
+        </div>
+      </div>
     </>
   )
 }
@@ -251,7 +312,13 @@ export function Menu({
           }}
         />
         <NavButton icon={faHammer} text="Lean Info" onClick={() => setToolsOpen(true)} />
-        { navbar.requiresNavBar != 0 && <NavButton icon={faEye} text={`${navbar.hideNavBar ? "Show" : "Hide"} Navbar`} onClick={() => navbar.setHideNavBar(!navbar.hideNavBar)} />}
+        {navbar.requiresNavBar != 0 && (
+          <NavButton
+            icon={faEye}
+            text={`${navbar.hideNavBar ? 'Show' : 'Hide'} Navbar`}
+            onClick={() => navbar.setHideNavBar(!navbar.hideNavBar)}
+          />
+        )}
         <NavButton icon={faArrowRotateRight} text="Restart server" onClick={restart} />
         <NavButton
           icon={faDownload}
