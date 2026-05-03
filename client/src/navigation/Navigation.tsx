@@ -52,6 +52,7 @@ function FlexibleMenu({
   setContent,
   setLoadUrlOpen,
   setLoadZulipOpen,
+  code,
 }: {
   isInDropdown: boolean
   setOpenNav: Dispatch<SetStateAction<boolean>>
@@ -62,6 +63,7 @@ function FlexibleMenu({
   setContent: (code: string) => void
   setLoadUrlOpen: Dispatch<SetStateAction<boolean>>
   setLoadZulipOpen: Dispatch<SetStateAction<boolean>>
+  code: string | undefined
 }) {
   const [, setImportUrlAndProject] = useAtom(setImportUrlAndProjectAtom)
   const [{ data: projects }] = useAtom(projectsAtom)
@@ -77,7 +79,14 @@ function FlexibleMenu({
     // Manually close the menu as we prevent it closing below.
     setOpenLoad(false)
   }
-  const [openWarning, setOpenWarning] = useState(true)
+  const [openWarning, setOpenWarning] = useState(
+    typeof code === 'string' && code.trim() === ''
+      ? false
+      : document.referrer.startsWith('https://not-live-lean.onrender.com/')
+        ? false
+        : true,
+  )
+  console.log('AAAAA', { code, openWarning }, typeof code === 'string' && code.trim() === '')
 
   return (
     <>
@@ -191,13 +200,18 @@ function FlexibleMenu({
               <FontAwesomeIcon size="xl" icon={faXmark} />
             </button>
             <svg
-              style={{ position: 'absolute', right: 0, top: 0 , overflow: "visible"}}
+              style={{ position: 'absolute', right: 0, top: 0, overflow: 'visible' }}
               viewBox="0 0 100 23"
               height="23"
               xmlns="http://www.w3.org/2000/svg"
             >
               <polygon points="23,23 0,0 46,23" fill="pink" />
-              <polyline points="0,21 21,21 0,0 42,21 50,21" fill="none" stroke="red" stroke-width="2" />
+              <polyline
+                points="0,21 21,21 0,0 42,21 50,21"
+                fill="none"
+                stroke="red"
+                stroke-width="2"
+              />
             </svg>
           </div>
         </div>
@@ -280,6 +294,7 @@ export function Menu({
           setContent={setContent}
           setLoadUrlOpen={setLoadUrlOpen}
           setLoadZulipOpen={setLoadZulipOpen}
+          code={code}
         />
       )}
       <Dropdown
