@@ -81,7 +81,7 @@ function FlexibleMenu({
   const [openWarning, setOpenWarning] = useState(
     typeof code === 'string' && code.trim() === ''
       ? false
-      : document.referrer.startsWith('https://not-live-lean.onrender.com/')
+      : document.referrer.startsWith('https://compybox2.onrender.com/')
         ? false
         : true,
   )
