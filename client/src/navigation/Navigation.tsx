@@ -52,7 +52,6 @@ function FlexibleMenu({
   setContent,
   setLoadUrlOpen,
   setLoadZulipOpen,
-  code,
 }: {
   isInDropdown: boolean
   setOpenNav: Dispatch<SetStateAction<boolean>>
@@ -63,7 +62,6 @@ function FlexibleMenu({
   setContent: (code: string) => void
   setLoadUrlOpen: Dispatch<SetStateAction<boolean>>
   setLoadZulipOpen: Dispatch<SetStateAction<boolean>>
-  code: string | undefined
 }) {
   const [, setImportUrlAndProject] = useAtom(setImportUrlAndProjectAtom)
   const [{ data: projects }] = useAtom(projectsAtom)
@@ -79,6 +77,7 @@ function FlexibleMenu({
     // Manually close the menu as we prevent it closing below.
     setOpenLoad(false)
   }
+  const [code] = useAtom(codeAtom)
   const [openWarning, setOpenWarning] = useState(
     typeof code === 'string' && code.trim() === ''
       ? false
@@ -294,7 +293,6 @@ export function Menu({
           setContent={setContent}
           setLoadUrlOpen={setLoadUrlOpen}
           setLoadZulipOpen={setLoadZulipOpen}
-          code={code}
         />
       )}
       <Dropdown
