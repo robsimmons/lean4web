@@ -1,6 +1,7 @@
 import Mathlib
 import ProofWidgets
 import Plausible
+import VersoManual
 
 import MathlibDemo.Bijection
 import MathlibDemo.Logic

@@ -1,0 +1,11 @@
+.sidebar {
+  display: none !important;
+}
+
+.hamburger {
+  display: none !important;
+}
+
+.title-bar {
+  display: none;
+}

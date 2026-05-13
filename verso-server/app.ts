@@ -1,9 +1,9 @@
 import express, { type Response } from 'express'
 import { z } from 'zod'
-import { mkdir, mkdtemp } from 'node:fs/promises'
+import { mkdir, mkdtemp, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { compileVerso, OUTPUT_ROOT_DIR } from './exec.ts'
+import { compileLiterateHtml, OUTPUT_ROOT_DIR } from './exec.ts'
 
 export const app = express()
 app.use(express.json())
@@ -25,7 +25,7 @@ app.use(express.json())
  */
 const trackingRequests: { [id: string]: Response } = {}
 
-app.get('/verso/api/stream', async (req, res) => {
+app.get('/literateHtml/api/stream', async (req, res) => {
   res.setHeader('Cache-Control', 'no-cache')
   res.setHeader('Content-Type', 'text/event-stream')
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -52,18 +52,19 @@ const zBuildRequest = z.object({
   projectId: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9.-]*$/),
   fileContents: z.string(),
 })
-app.post('/verso/api/singlepage', async (req, res) => {
+app.post('/literateHtml/api/singlepage', async (req, res) => {
   const id: string | null = req.query.stream ? `${req.query.stream}` : null
   if (id) {
     if (id in trackingRequests) {
-      console.log(`connected /verso/api/singlepage to ${id}`)
+      console.log(`connected /literateHtml/api/singlepage to ${id}`)
     } else {
-      console.log(`could not connect /verso/api/singlepage to ${id}`)
+      console.log(`could not connect /literateHtml/api/singlepage to ${id}`)
     }
   }
 
   /** Report incremental progress to the SSE session */
   function sendProgress(obj: unknown) {
+    console.log(obj)
     if (id === null) return
     if (id in trackingRequests) {
       const txt = JSON.stringify(obj)
@@ -76,10 +77,13 @@ app.post('/verso/api/singlepage', async (req, res) => {
   if (!body.success) {
     res.status(400).send({ error: 'Poorly-formed request' })
     return
-  }
+  } 
 
   // Run subcommand
-  const [resultPath, subprocess] = await compileVerso(body.data.projectId, body.data.fileContents)
+  const [resultPath, subprocess] = await compileLiterateHtml(
+    body.data.projectId,
+    body.data.fileContents,
+  )
   subprocess.stdout.on('data', (data) => {
     for (const line of `${data}`.trim().split('\n')) {
       sendProgress({ stream: 'stdout', contents: line })
@@ -99,7 +103,7 @@ app.post('/verso/api/singlepage', async (req, res) => {
     if (finished) return
     if (data === 0) {
       sendProgress({ stream: 'stdout', contents: 'Finished successfully!' })
-      res.send({ success: true, href: `/verso/view/${resultPath}/html-single` })
+      res.send({ success: true, href: `/literateHtml/view/${resultPath}/` })
     } else {
       res.send({ success: false, result: `process returned non-zero exit code ${data}` })
     }
@@ -107,4 +111,4 @@ app.post('/verso/api/singlepage', async (req, res) => {
 })
 
 console.log(`Serving static files from ${OUTPUT_ROOT_DIR}`)
-app.use('/verso/view', express.static(OUTPUT_ROOT_DIR))
+app.use('/literateHtml/view', express.static(OUTPUT_ROOT_DIR))

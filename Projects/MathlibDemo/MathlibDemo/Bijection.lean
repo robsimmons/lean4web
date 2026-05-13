@@ -1,7 +1,6 @@
 import Mathlib.Logic.Equiv.Basic -- import the theory
 -- of bijections as functions with two-sided inverses
 
--- Let X, Y and Z be sets
 variable (X Y Z : Type)
 
 -- Then there's a bijection between functions `X × Y → Z`

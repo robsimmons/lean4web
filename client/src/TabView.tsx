@@ -60,6 +60,8 @@ interface TabViewProps {
   projectId: string
   tab: string
   setTab: (tab: string) => void
+  workbenchMsg: any
+  sessionId: null | string
 }
 
 function TabView({
@@ -69,7 +71,9 @@ function TabView({
   isUsingCodeMirror,
   isUsingMobile,
   code,
+  workbenchMsg,
   projectId,
+  sessionId,
 }: TabViewProps) {
   const tabs =
     lean4webConfig.projects.filter(({ folder }) => folder === projectId)[0]?.plugins ?? []
@@ -97,8 +101,8 @@ function TabView({
         <div
           style={{
             flexGrow: 1,
-            borderLeft: '1px solid rgb(200,200,200)',
-            borderBottom: '1px solid rgb(200,200,200)',
+            borderLeft: '1px solid var(--vscode-tab-border)',
+            borderBottom: '1px solid var(--vscode-tab-border)',
           }}
         />
       </div>
@@ -109,7 +113,7 @@ function TabView({
           currentTab={tabId}
         />
         {tabs.includes('versobox') && (
-          <VersoPreview projectId={projectId} currentTab={tabId} code={code} />
+          <VersoPreview code={code} id={sessionId} currentTab={tabId} workbenchMsg={workbenchMsg} />
         )}
       </div>
     </div>

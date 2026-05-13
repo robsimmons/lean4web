@@ -15,7 +15,7 @@
     "start": "concurrently -n lsp-server,client,verso-server -c \"#619fff,#4db556,#d381e5\" \"npm run start:lsp-server\" \"npm run start:client\" \"npm run start:verso-server\"",
     "start:lsp-server": "cd lsp-server && NODE_ENV=development nodemon ./index.mjs",
     "start:client": "NODE_ENV=development vite --host",
-    "start:verso-server": "NODE_ENV=development nodemon ./verso-server/server.ts",
+    "start:verso-server": "NODE_ENV=development nodemon --watch verso-server ./verso-server/server.ts",
     "build-without-projects": "npm run build:client && npm run build:verso-server",
     "build": "npm run build:projects && npm run build-without-projects",
     "build:projects": "Projects/build.sh",

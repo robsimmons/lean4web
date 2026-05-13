@@ -5,17 +5,16 @@ import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import { normalizePath } from 'vite'
 import path from 'node:path'
-import svgr from "vite-plugin-svgr"
-
+import svgr from 'vite-plugin-svgr'
 
 // https://vitejs.dev/config/
 export default defineConfig({
   optimizeDeps: {
     esbuildOptions: {
       // @ts-ignore           // TODO
-      plugins: [importMetaUrlPlugin]
+      plugins: [importMetaUrlPlugin],
     },
-    exclude: ['Projects']
+    exclude: ['Projects'],
   },
   build: {
     // Relative to the root
@@ -25,8 +24,8 @@ export default defineConfig({
   plugins: [
     react(),
     svgr({
-      include: ["**/*.svg?react", "**/*.svg"],
-      svgrOptions: { exportType: "default", ref: true, svgo: false, titleProp: true },
+      include: ['**/*.svg?react', '**/*.svg'],
+      svgrOptions: { exportType: 'default', ref: true, svgo: false, titleProp: true },
     }),
     nodePolyfills({
       overrides: {
@@ -38,39 +37,46 @@ export default defineConfig({
         {
           src: [
             normalizePath(path.resolve(__dirname, './node_modules/@leanprover/infoview/dist/*')),
-            normalizePath(path.resolve(__dirname, './node_modules/lean4monaco/dist/webview/webview.js')),
+            normalizePath(
+              path.resolve(__dirname, './node_modules/lean4monaco/dist/webview/webview.js'),
+            ),
           ],
-          dest: 'infoview'
+          dest: 'infoview',
         },
         {
           src: [
-            normalizePath(path.resolve(__dirname, './node_modules/@leanprover/infoview/dist/codicon.ttf'))
+            normalizePath(
+              path.resolve(__dirname, './node_modules/@leanprover/infoview/dist/codicon.ttf'),
+            ),
           ],
-          dest: 'assets'
-        }
-      ]
-    })
+          dest: 'assets',
+        },
+      ],
+    }),
   ],
-  publicDir: "client/public/",
-  base: "/", // setting this to `/leanweb/` means the server is now accessible at `localhost:3000/leanweb`
+  publicDir: 'client/public/',
+  base: '/', // setting this to `/leanweb/` means the server is now accessible at `localhost:3000/leanweb`
   server: {
     port: 3000,
     proxy: {
       '/websocket': {
         target: 'ws://localhost:8080',
-        ws: true
+        ws: true,
       },
       '/api': {
         target: 'http://localhost:8080',
       },
       '/verso': {
+        target: 'http://localhost:8080',
+      },
+      '/literateHtml': {
         target: 'http://localhost:8081',
       },
-    }
+    },
   },
   resolve: {
     alias: {
-      path: "path-browserify",
+      path: 'path-browserify',
     },
   },
 })

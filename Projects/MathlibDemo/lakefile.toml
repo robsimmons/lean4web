@@ -1,13 +1,43 @@
 name = "MathlibDemo"
-defaultTargets = ["MathlibDemo"]
+defaultTargets = ["MathlibDemo", "TheLeanFile"]
+moreLeancArgs = ["-O0"]
 
 [leanOptions]
 pp.unicode.fun = true
+doc.verso = true
+
+[[require]]
+name = "verso"
+git = "https://github.com/leanprover/verso"
+rev = "html-handler"
+
+[[require]]
+name = "lean4export"
+scope = "leanprover"
+rev = "v4.29.0"
+
+[[require]]
+name = "comparator"
+git = "https://github.com/leanprover/comparator"
+rev = "specify-execs"
 
 [[require]]
 name = "mathlib"
 git = "https://github.com/leanprover-community/mathlib4"
-rev = "master"
+rev = "v4.29.0"
 
 [[lean_lib]]
 name = "MathlibDemo"
+
+[[lean_lib]]
+name = "TheLeanFile"
+
+[[lean_lib]]
+name = "Challenge"
+
+[[lean_lib]]
+name = "Solution"
+
+[[lean_exe]]
+name = "challenge-thms"
+root = "ChallengeThms"

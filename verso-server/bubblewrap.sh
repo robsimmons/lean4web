@@ -36,4 +36,4 @@ exec bwrap \
     --unshare-all  \
     --die-with-parent \
     --chdir /project \
-    /lean/bin/lake --keep-toolchain build
+    /lean/bin/lake build :literateHtml

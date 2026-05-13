@@ -1,74 +1,43 @@
 import { useEffect, useRef, useState } from 'react'
 import { LeanWebPlugin } from '../config/docs'
-import { TabId } from '../TabView'
+import LiterateHtmlPreview from './LiterateHtmlPreview'
 
 interface VersoPreviewProps {
   currentTab: 'info' | LeanWebPlugin
+  id: string
+  workbenchMsg: any
   code: string
-  projectId: string
 }
 
-function VersoPreview({ currentTab, code, projectId }: VersoPreviewProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const [previewedCode, setPreviewedCode] = useState<null | string>(null)
-  const [hrefForIframe, setHrefForIframe] = useState<null | string>(null)
-  const [output, setOutput] = useState<string[]>([])
-  const scrollerRef = useRef<HTMLDivElement>(null)
+/**
+ * In order to have the invariant that there's always an iframe, but also to
+ * make sure we don't have a behind-the-scenes 404 happening, we give the
+ * iframe a URL to load initially.
+ */
+const INITIAL_HREF = '/verso/'
 
-  const loadCode = () => {
-    setIsLoading(true)
-    setOutput([])
+function VersoPreview({ id, currentTab, workbenchMsg, code }: VersoPreviewProps) {
+  const [state, setState] = useState<any>(null)
+  const ref = useRef<null | HTMLIFrameElement>(null)
 
-    const read = new EventSource('/verso/api/stream')
-    read.onerror = (x) => console.log({ error: x })
-    read.onmessage = ({ data }) => {
-      const line = JSON.parse(data)
-      setOutput((info) => [...info, line.contents])
+  const showVersoDoc = code.split('\n').some((str) => str.startsWith('#doc '))
+
+  useEffect(() => {
+    if (workbenchMsg?.event === 'buildHtml') {
+      console.log(`Verso preview updated, ${workbenchMsg.elapsed}ms`)
+      setState(workbenchMsg)
+      if (workbenchMsg.errors.length === 0) {
+        // First time through, switch to the preview url, subsequently reload
+        if (ref.current?.contentWindow.location.pathname === INITIAL_HREF) {
+          ref.current?.contentWindow.location.replace('/verso/view/' + id + '/html-single/')
+        } else if (workbenchMsg.errors.length === 0) {
+          ref.current?.contentWindow.location.reload()
+        }
+      }
     }
-    read.addEventListener('connect', (event) => {
-      const streamId = event.data
-      setOutput((info) => [...info, 'connected!'])
+  }, [workbenchMsg])
 
-      fetch(`/verso/api/singlepage?stream=${streamId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ projectId: projectId, fileContents: code }),
-      })
-        .then((resp) => resp.json())
-        .then((json) => {
-          setIsLoading(false)
-          if (!json.success) {
-            setOutput((info) => [...info, json.result ?? 'Unexpected response from server.'])
-            console.error(json)
-            return
-          }
-          setHrefForIframe(json.href)
-          setPreviewedCode(code)
-        })
-        .catch((err) => {
-          setIsLoading(false)
-          setOutput((info) => [...info, 'Unexpected response from server.'])
-          console.error(err)
-        })
-        .finally(() => read.close())
-    })
-  }
-
-  const [lastTab, setLastTab] = useState<TabId | null>(null)
-  useEffect(() => {
-    if (lastTab && lastTab === currentTab) return
-    setLastTab(currentTab)
-    if (currentTab !== 'versobox') return
-    if (code === previewedCode) return
-    if (isLoading) return
-    loadCode()
-  }, [currentTab, lastTab])
-
-  useEffect(() => {
-    scrollerRef.current.scrollTop = scrollerRef.current.scrollHeight
-  }, [output, hrefForIframe])
+  if (!showVersoDoc) return <LiterateHtmlPreview code={code} currentTab={currentTab} />
 
   return (
     <div
@@ -76,18 +45,27 @@ function VersoPreview({ currentTab, code, projectId }: VersoPreviewProps) {
       aria-labelledby="tab-preview"
       style={currentTab === 'versobox' ? {} : { display: 'none' }}
     >
-      <button disabled={isLoading} onClick={loadCode}>
-        {isLoading ? 'Loading...' : 'Load'}
-      </button>
-      <div
-        ref={scrollerRef}
-        style={{ overflow: 'scroll', width: '100%', height: '2.5em', flexGrow: 1 }}
-      >
-        <div style={{ width: 'max-content', height: 'max-content' }} className="versostatus">
-          {output.join('\n')}
+      {!state && 'waiting for a Verso document to be fully loaded'}
+      {state && state.errors.length > 0 && (
+        <div>
+          Error{state.errors.length === 1 ? '' : 's'} encountered rendering to HTML:
+          <ul>
+            {state.errors.map((err, i) => (
+              <li key={i}>{err}</li>
+            ))}
+          </ul>
         </div>
-      </div>
-      {hrefForIframe && <iframe key={hrefForIframe} src={hrefForIframe} />}
+      )}
+      {
+        /* The iframe is always present, but we { display: none } it when another element is shown */
+        <iframe
+          ref={ref}
+          style={
+            state && state.errors.length === 0 ? { backgroundColor: 'white' } : { display: 'none' }
+          }
+          src={INITIAL_HREF}
+        />
+      }
     </div>
   )
 }

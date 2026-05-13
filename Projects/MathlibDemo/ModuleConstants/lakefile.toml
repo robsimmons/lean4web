@@ -1,0 +1,7 @@
+name = "ModuleConstants"
+version = "0.1.0"
+defaultTargets = ["moduleconstants"]
+
+[[lean_exe]]
+name = "module-constants"
+root = "Main"

@@ -1,16 +1,14 @@
 name = "verso-nightly"
 version = "0.1.0"
 moreLeancArgs = ["-O0"]
-defaultTargets = ["TheLeanFile", "MakeVerso"]
+defaultTargets = ["TheLeanFile"]
 
 [[require]]
 name = "verso"
 git = "https://github.com/leanprover/verso"
-rev = "nightly-testing"
+rev = "html-handler"
 
 [[lean_lib]]
 name = "TheLeanFile"
 
-[[lean_lib]]
-name = "MakeVerso"
 
