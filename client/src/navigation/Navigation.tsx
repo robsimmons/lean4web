@@ -182,7 +182,7 @@ function FlexibleMenu({
               validated against a trusted challenge.
             </p>
             <p style={{ marginBottom: 0 }}>
-              Click here to go to comparator.live-lean.org and validate this proof.
+              Click "Can I Trust This Proof?" above to go to comparator.live.live-lean.org and validate this proof.
             </p>
             <button
               style={{
