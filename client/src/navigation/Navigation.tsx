@@ -159,7 +159,7 @@ function FlexibleMenu({
         icon={faHandshakeSimple}
         text="Can I Trust This Proof?"
         onClick={() => {
-          window.location.assign('https://compybox2.onrender.com/' + window.location.hash)
+          window.location.assign('https://comparator.live.lean-lang.org/' + window.location.hash)
         }}
       />
       <div style={{ position: 'relative', display: openWarning ? 'inline' : 'none' }}>
