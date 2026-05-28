@@ -40,6 +40,7 @@ The file `leanweb-config.json` takes the following form:
   "name": "Display name",
   "default": false,
   "hidden": false,
+  "sortOrder": 0,
   "examples": [
     { "file": "MathlibDemo/Bijection.lean", "name": "Example's display name" },
     ...
@@ -47,11 +48,14 @@ The file `leanweb-config.json` takes the following form:
 }
 ```
 
-- `name`: The display name of the project as shown in the dropdown menu
+- `name`: The display name of the project as shown in the dropdown menu.
+  - `_Vers_`: this pattern inside the name will be replaced with the version from the toolchain
 - `default`: There must be exactly one project with this set to `true`. This is the project loaded
   by default and when no project is specified in the url.
 - `hidden`: If set to `true`, then the project does not appear in the dropdown and can
   only be accessed via direct link.
+- `sortOrder`(non-negative number): sort order of the projects in the dropdown. The default always comes first, then
+  projects with higher `sortOrder` value. Ties are resolved alphabetically.
 - `examples`: list of examples. The path is relativ to the project's directory, e.g. `{PROJECTS_BASE_PATH}/{PROJECT_FOLDER}/{EXAMPLE_PATH.lean}`
 
 ## automatic builds

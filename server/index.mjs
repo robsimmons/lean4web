@@ -72,12 +72,8 @@ app.use("/api/projects", async (req, res) => {
 
         config = zLeanWebProjectConfig.parse(JSON.parse(raw));
         config.name = config.name.replaceAll(
-          "_LeanVers_",
-          toolchainToName(toolchain, true),
-        );
-        config.name = config.name.replaceAll(
           "_Vers_",
-          toolchainToName(toolchain, false),
+          toolchainToName(toolchain),
         );
       } catch (err) {
         console.debug(err);
@@ -92,7 +88,7 @@ app.use("/api/projects", async (req, res) => {
             hidden: config.hidden ?? false,
             default: config.default ?? false,
             examples: config.examples ?? [],
-            sortOrder: config.sortOrder ?? null,
+            sortOrder: config.sortOrder ?? 0,
           },
         });
       }
@@ -472,13 +468,10 @@ function hasWorkingBwrap() {
   return test.status === 0;
 }
 
-function toolchainToName(toolchain, prefixLean) {
-  console.log(toolchain);
+function toolchainToName(toolchain) {
   const nightly = toolchain.match(/^leanprover\/lean4\:nightly-(.*)$/);
-  if (nightly) return prefixLean ? `Lean ${nightly[1]}` : nightly[1];
-  console.log(nightly);
+  if (nightly) return nightly[1];
   const release = toolchain.match(/^leanprover\/lean4\:(.*)$/);
-  console.log(release);
-  if (release) return prefixLean ? `Lean ${release[1]}` : release[1];
-  return "Lean";
+  if (release) return release[1];
+  return "";
 }
