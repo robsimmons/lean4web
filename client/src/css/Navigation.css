@@ -152,3 +152,101 @@ nav select:hover {
   font-style: italic;
   color: var(--vscode-textLink-foreground);
 }
+
+/* "Can I Trust This Proof?" callout — a Popper-anchored bubble with an arrow.
+   Rendered in a body portal so it escapes the navbar's stacking/scroll
+   context (no more scrollbar bleed-through). */
+.comparator-callout-popper {
+  z-index: 1500;
+}
+
+.comparator-callout {
+  position: relative;
+  box-sizing: border-box;
+  max-width: 280px;
+  padding: 0.9em 1em;
+  font-size: 90%;
+  line-height: 1.4;
+  background-color: var(--vscode-editorHoverWidget-background);
+  color: var(--vscode-editorHoverWidget-foreground);
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  border-radius: 0.4em;
+  box-shadow: 0 0.2rem 0.6rem 0 rgba(0, 0, 0, 0.35);
+}
+
+.comparator-callout p {
+  margin: 0 0 0.6em;
+}
+
+.comparator-callout-title {
+  font-weight: bold;
+  padding-right: 1.4em; /* leave room for the close button */
+}
+
+.comparator-callout-close {
+  position: absolute;
+  top: 0.3em;
+  right: 0.3em;
+  padding: 0.3em 0.5em;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: inherit;
+  opacity: 0.7;
+}
+
+.comparator-callout-close:hover {
+  opacity: 1;
+}
+
+.comparator-callout-dismiss {
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: inherit;
+  color: var(--vscode-textLink-foreground);
+}
+
+.comparator-callout-dismiss:hover {
+  text-decoration: underline;
+}
+
+/* Arrow: a rotated square straddling the bubble's edge. Popper positions it
+   along the edge; we only style the two visible borders per placement. */
+.comparator-callout-arrow {
+  position: absolute;
+  width: 1em;
+  height: 1em;
+  box-sizing: border-box;
+}
+
+.comparator-callout-arrow::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: var(--vscode-editorHoverWidget-background);
+  border: 1px solid var(--vscode-editorHoverWidget-border);
+  transform: rotate(45deg);
+}
+
+.comparator-callout-popper[data-popper-placement*='bottom'] .comparator-callout-arrow {
+  top: 0;
+  margin-top: -0.5em;
+}
+
+.comparator-callout-popper[data-popper-placement*='bottom'] .comparator-callout-arrow::before {
+  border-right: none;
+  border-bottom: none;
+}
+
+.comparator-callout-popper[data-popper-placement*='top'] .comparator-callout-arrow {
+  bottom: 0;
+  margin-bottom: -0.5em;
+}
+
+.comparator-callout-popper[data-popper-placement*='top'] .comparator-callout-arrow::before {
+  border-left: none;
+  border-top: none;
+}

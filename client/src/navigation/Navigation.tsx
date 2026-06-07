@@ -21,6 +21,9 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
+import ClickAwayListener from '@mui/material/ClickAwayListener'
+import Grow from '@mui/material/Grow'
+import Popper from '@mui/material/Popper'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { ChangeEvent, Dispatch, SetStateAction, useState } from 'react'
 
@@ -33,7 +36,7 @@ import LoadUrlPopup from '../Popups/LoadUrl'
 import LoadZulipPopup from '../Popups/LoadZulip'
 import PrivacyPopup from '../Popups/PrivacyPolicy'
 import ToolsPopup from '../Popups/Tools'
-import { mobileAtom } from '../settings/settings-atoms'
+import { localOnlySettingsAtom, mobileAtom } from '../settings/settings-atoms'
 import { SettingsPopup } from '../settings/SettingsPopup'
 import { setImportUrlAndProjectAtom } from '../store/import-atoms'
 import { currentProjectAtom, projectsAtom, visibleProjectsAtom } from '../store/project-atoms'
@@ -68,7 +71,21 @@ function FlexibleMenu({
   const { data: projects } = useAtomValue(projectsAtom)
   const urlArgs = useAtomValue(urlArgsStableAtom)
   const code = useAtomValue(codeAtom)
+  const [localOnlySettings, setLocalOnlySettings] = useAtom(localOnlySettingsAtom)
   const isUsingUrlCode = !!urlArgs?.url
+
+  // The proactive "Can I Trust This Proof?" callout. We only point at the
+  // top-level button (not the copy nested in the mobile hamburger dropdown,
+  // which is hidden until opened), and only when the button is actionable.
+  const [anchorEl, setAnchorEl] = useState<HTMLAnchorElement | null>(null)
+  const [arrowEl, setArrowEl] = useState<HTMLElement | null>(null)
+  const [calloutDismissed, setCalloutDismissed] = useState(false)
+  const calloutEligible =
+    !isInDropdown &&
+    !isUsingUrlCode &&
+    (code ?? '').trim() !== '' &&
+    !localOnlySettings.ignoreComparatorWarning
+  const calloutOpen = calloutEligible && !calloutDismissed && anchorEl !== null
 
   const loadFileFromDisk = (event: ChangeEvent<HTMLInputElement>) => {
     console.debug('Loading file from disk')
@@ -152,6 +169,7 @@ function FlexibleMenu({
         />
       </Dropdown>
       <NavButton
+        ref={isInDropdown ? undefined : setAnchorEl}
         icon={faHandshake}
         text={'Can I Trust This Proof?'}
         disabled={isUsingUrlCode}
@@ -166,6 +184,55 @@ function FlexibleMenu({
           window.location.assign('https://comparator.live.lean-lang.org/' + window.location.hash)
         }}
       />
+      <Popper
+        open={calloutOpen}
+        anchorEl={anchorEl}
+        placement="bottom-end"
+        transition
+        className="comparator-callout-popper"
+        modifiers={[
+          { name: 'offset', options: { offset: [0, 12] } },
+          { name: 'preventOverflow', options: { padding: 8 } },
+          { name: 'flip', enabled: true },
+          { name: 'arrow', enabled: true, options: { element: arrowEl, padding: 8 } },
+        ]}
+      >
+        {({ TransitionProps }) => (
+          <ClickAwayListener onClickAway={() => setCalloutDismissed(true)}>
+            <Grow {...TransitionProps} timeout={200}>
+              <div className="comparator-callout" role="dialog" aria-label="Can I trust this proof?">
+                <span className="comparator-callout-arrow" ref={setArrowEl} />
+                <button
+                  type="button"
+                  className="comparator-callout-close"
+                  aria-label="Dismiss"
+                  onClick={() => setCalloutDismissed(true)}
+                >
+                  <FontAwesomeIcon icon={faXmark} />
+                </button>
+                <p className="comparator-callout-title">Can I trust this proof?</p>
+                <p>
+                  Don't trust proofs from untrusted sources unless they're validated against a
+                  trusted challenge. Use <strong>Can I Trust This Proof?</strong> above to check this
+                  one with the Comparator tool.
+                </p>
+                <button
+                  type="button"
+                  className="comparator-callout-dismiss"
+                  onClick={() =>
+                    setLocalOnlySettings({
+                      ...localOnlySettings,
+                      ignoreComparatorWarning: true,
+                    })
+                  }
+                >
+                  Don't show this again
+                </button>
+              </div>
+            </Grow>
+          </ClickAwayListener>
+        )}
+      </Popper>
     </>
   )
 }

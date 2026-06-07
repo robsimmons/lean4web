@@ -1,6 +1,6 @@
 import { IconDefinition } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
-import { JSX, MouseEventHandler } from 'react'
+import { JSX, MouseEventHandler, Ref } from 'react'
 
 /** A button to appear in the hamburger menu or to navigation bar. */
 export function NavButton({
@@ -11,6 +11,7 @@ export function NavButton({
   onClick = () => {},
   href = undefined,
   disabled = false,
+  ref,
 }: {
   icon?: IconDefinition
   iconElement?: JSX.Element
@@ -19,11 +20,13 @@ export function NavButton({
   onClick?: MouseEventHandler<HTMLAnchorElement>
   href?: string
   disabled?: boolean
+  ref?: Ref<HTMLAnchorElement>
 }) {
   // note: it seems that we can just leave the `target="_blank"` and it has no
   // effect on links without a `href`. If not, add `if (href)` statement here...
   return (
     <a
+      ref={ref}
       className={`nav-link${disabled ? ' disabled' : ''}`}
       title={title}
       aria-disabled={disabled || undefined}
