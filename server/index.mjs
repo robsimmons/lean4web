@@ -292,6 +292,42 @@ wss.addListener("connection", async function (ws, req) {
     ws.close(),
   );
   const serverConnection = jsonrpcserver.createProcessStreamConnection(ps);
+
+  // --- `#echo` proof-of-concept state (per connection) ---
+  // `currentVersion`: the document version the client is currently editing.
+  // `echoes`: the `#echo` messages collected from diagnostics for that version.
+  // `currentVersionComplete`: whether elaboration finished for that version.
+  // `firedVersion`: the version we've already alerted for (fire-once guard).
+  let currentVersion = NaN;
+  let currentVersionComplete = false;
+  let echoes = [];
+  let firedVersion = NaN;
+
+  // Fire once per version, when elaboration is done AND we've collected at least
+  // one `#echo`. The two signals race: on load the diagnostic lands before the
+  // empty `fileProgress`, but on edits the empty `fileProgress` lands first and
+  // the diagnostic follows — so we call this from both sites and let whichever
+  // completes the pair do the injection.
+  function maybeFireEcho() {
+    if (
+      currentVersionComplete &&
+      echoes.length > 0 &&
+      firedVersion !== currentVersion
+    ) {
+      firedVersion = currentVersion;
+      console.log(
+        `[echo] firing $/echo/alert for v=${currentVersion}: ${JSON.stringify(echoes)}`,
+      );
+      ws.send(
+        JSON.stringify({
+          jsonrpc: "2.0",
+          method: "$/echo/alert",
+          params: { version: currentVersion, messages: echoes },
+        }),
+      );
+    }
+  }
+
   socketConnection.forward(serverConnection, (message) => {
     const prefix = isDevelopment ? PROJECTS_BASE_PATH : "";
 
@@ -299,16 +335,81 @@ wss.addListener("connection", async function (ws, req) {
       urisToFilenames(prefix, message);
     }
 
+    if (
+      message.method === "textDocument/didOpen" ||
+      message.method === "textDocument/didChange"
+    ) {
+      currentVersion = message.params.textDocument.version;
+      currentVersionComplete = false;
+      echoes = [];
+      console.log(
+        "CLIENT: Document version now " +
+          message.params.textDocument.version,
+      );
+    }
+
     if (isDevelopment && !isGithubAction) {
-      console.log(`CLIENT: ${JSON.stringify(message)}`);
+      //console.log(`CLIENT: ${JSON.stringify(message)}`);
     }
     return message;
   });
   serverConnection.forward(socketConnection, (message) => {
     const prefix = isDevelopment ? PROJECTS_BASE_PATH : "";
     FilenamesToUri(prefix, message);
+
+    // Collect `#echo` messages as they are published as information diagnostics.
+    // `Echo.lean` logs each `#echo "..."` as `#echo: ...`. Lean may publish
+    // diagnostics incrementally (`isIncremental: true` => append to the previous
+    // set) or as a full set (replace), so we mirror that here.
+    if (message.method === "textDocument/publishDiagnostics") {
+      const allMsgs = (message.params.diagnostics ?? []).map((d) => d.message);
+      console.log(
+        `[echo] publishDiagnostics v=${message.params.version} current=${currentVersion}` +
+          ` incremental=${message.params.isIncremental} n=${allMsgs.length}` +
+          ` msgs=${JSON.stringify(allMsgs)}`,
+      );
+      if (message.params.version === currentVersion) {
+        const MARKER = "#echo: ";
+        const found = allMsgs
+          .filter((m) => typeof m === "string" && m.startsWith(MARKER))
+          .map((m) => m.slice(MARKER.length));
+        echoes = message.params.isIncremental === true ? echoes.concat(found) : found;
+        console.log(`[echo] echoes now = ${JSON.stringify(echoes)}`);
+        maybeFireEcho(); // diagnostic may arrive after fileProgress-done (edits)
+      } else {
+        console.log(
+          `[echo] (version mismatch -> not collecting; ` +
+            `diag v=${message.params.version} != current=${currentVersion})`,
+        );
+      }
+    }
+
+    if (message.method === "$/lean/fileProgress") {
+      console.log(
+        `[echo] fileProgress v=${message.params.textDocument.version} current=${currentVersion}` +
+          ` processing=${message.params.processing.length}` +
+          ` complete=${currentVersionComplete} echoes=${echoes.length}`,
+      );
+    }
+
+    if (
+      message.method === "$/lean/fileProgress" &&
+      message.params.processing.length === 0 &&
+      message.params.textDocument.version === currentVersion &&
+      !currentVersionComplete
+    ) {
+      currentVersionComplete = true;
+      console.log("SERVER: Document load complete for " + currentVersion);
+
+      // PoC: ask the browser to alert() if this file contained any `#echo`s.
+      // The injection itself happens in `maybeFireEcho` (the `#echo` diagnostic
+      // may not have arrived yet on edits), via a passive tap in the client
+      // (client/src/echo-alert.ts) that surfaces it as an alert.
+      maybeFireEcho();
+    }
+
     if (isDevelopment && !isGithubAction) {
-      console.log(`SERVER: ${JSON.stringify(message)}`);
+      //console.log(`SERVER: ${JSON.stringify(message)}`);
     }
     return message;
   });

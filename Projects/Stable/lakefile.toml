@@ -1,6 +1,9 @@
 name = "Stable"
 reservoir = false
-defaultTargets = ["Stable"]
+defaultTargets = ["Stable", "Echo"]
 
 [[lean_lib]]
 name = "Stable"
+
+[[lean_lib]]
+name = "Echo"

@@ -1,4 +1,7 @@
 import './css/index.css'
+// Installs the `$/echo/alert` websocket tap (proof of concept). Side-effect
+// import; must run before lean4monaco opens its LSP socket.
+import './echo-alert'
 
 import { StrictMode } from 'react'
 import ReactDOM from 'react-dom/client'
