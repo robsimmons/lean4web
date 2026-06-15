@@ -7,164 +7,157 @@ When a user writes a file beginning with `import Echo` and containing one or mor
 browser `alert()` showing the echoed text. (Undefined behavior if the file has
 elaboration errors — see caveats.)
 
-This is a proof of concept demonstrating a general pattern: *get information out of
-Lean elaboration and react to it in the browser, keyed off the
-"document fully loaded" signal*, without modifying or rebuilding the Lean server.
+This demonstrates a general pattern: *get structured information out of Lean
+elaboration and react to it in the browser, keyed off the "document fully loaded"
+signal*, **without modifying or rebuilding the Lean server**.
+
+Status: **working** end-to-end on a live demo server. The Lean-side `@[server_rpc_method]`
+travels in via `import Echo`; the proxy pulls the data over RPC and injects a
+notification the browser surfaces as `alert()`.
 
 ## Architecture
 
-The lean4web server (`server/index.mjs`) is a JSON-RPC proxy sitting between the
-browser's WebSocket and a per-connection `lake serve` process. It already
-eavesdrops on both directions of the stream. We use four small touch points:
+The lean4web server (`server/index.mjs`) is a JSON-RPC proxy between the browser's
+WebSocket and a per-connection `lake serve` process. The `#echo` payload is read as
+**structured data over a custom RPC method** — no diagnostic string-matching.
 
 ```
-  Browser                     server/index.mjs (proxy)              lake serve
-  ───────                     ────────────────────────              ──────────
+  Browser                    server/index.mjs (proxy)               lake serve
+  ───────                    ────────────────────────               ──────────
   echo-alert.ts                                                     Echo.lean
-  (WebSocket tap)                                                   (#echo cmd)
+  (WebSocket tap)                                                   #echo / Echo.collect
        │                                                                 │
-       │  didOpen/didChange ───────────►  track currentVersion ────────►│
-       │                                  reset echoes=[]                │  elaborate
-       │                                                                 │  #echo "x"
-       │                                  publishDiagnostics  ◄──────────│  logInfo
-       │                                  collect "#echo: x" → echoes    │  "#echo: x"
-       │                                                                 │
-       │                                  $/lean/fileProgress []  ◄──────│  done
-       │                                  (load complete for version)    │
-       │  $/echo/alert  ◄──── inject if echoes.length>0                  │
+       │  didOpen/didChange ──────────►  track currentVersion ──────────►│ elaborate
+       │                                                                 │ #echo "x" stamps
+       │                                                                 │ EchoInfo into InfoTree
+       │                                 $/lean/fileProgress []  ◄────────│ done
+       │                                 (debounced ≤1 / 4000ms)         │
+       │                                 rpc/connect ───────────────────►│
+       │                                 rpc/call Echo.collect ─────────►│ walk InfoTrees
+       │                                 result {messages} ◄─────────────│ → ["x", ...]
+       │  $/echo/alert  ◄──── inject if messages.length>0                │
    alert("x")                                                            │
 ```
 
-1. **`Projects/Stable/Echo.lean`** — defines the `#echo` command. `#echo "x"`
-   logs `#echo: x` as an *information* diagnostic via `logInfoAt`. No Lean-server
-   changes: the message rides out on the ordinary `textDocument/publishDiagnostics`
-   notification, exactly like the output of `#check`.
+Four touch points:
 
-2. **`Projects/Stable/lakefile.toml`** — adds an `Echo` `lean_lib` and includes it
-   in `defaultTargets` so `leanweb-build.sh`'s `lake build` pre-builds it and
+1. **`Projects/Stable/Echo.lean`** — `#echo "x"` stamps a structured `EchoInfo`
+   marker into the `InfoTree` (`pushInfoLeaf <| .ofCustomInfo …`). It emits **no
+   diagnostic** — no infoview message, no editor squiggle. The
+   `@[server_rpc_method] Echo.collect` handler walks the document's info trees and
+   returns every payload as `{ messages : Array String }`.
+
+2. **`Projects/Stable/lakefile.toml`** — adds an `Echo` `lean_lib` in
+   `defaultTargets` so `leanweb-build.sh`'s `lake build` pre-builds it and
    `import Echo` resolves.
 
 3. **`server/index.mjs`** (the proxy) — per connection:
    - tracks `currentVersion` from client→server `didOpen`/`didChange`;
-   - collects `#echo: ` messages from server→client `publishDiagnostics` for that
-     version (honoring Lean's incremental-diagnostics mode);
    - on the `$/lean/fileProgress` "done" signal (empty `processing`) for the
-     current version, if any echoes were collected, **injects** a custom
+     current version, schedules a **debounced** check (≤1 per 4000 ms);
+   - the check issues `$/lean/rpc/connect` then `$/lean/rpc/call Echo.collect`
+     toward `lake serve`, and if the result is non-empty **injects** a custom
      `$/echo/alert` notification onto the browser-bound socket.
 
 4. **`client/src/echo-alert.ts`** — wraps the global `WebSocket` constructor and
-   attaches a *passive* `message` listener to the `/websocket/` socket. When it
-   sees `$/echo/alert`, it calls `window.alert(...)`. It never consumes or alters
-   messages, so lean4monaco's language client is unaffected (it simply ignores the
-   unknown notification). Installed via a side-effect import at the top of
+   attaches a *passive* `message` listener to the `/websocket/` socket. On
+   `$/echo/alert` it calls `window.alert(...)`. It never consumes or alters
+   messages, so lean4monaco's language client is unaffected (it ignores the unknown
+   notification). Installed via a side-effect import at the top of
    `client/src/index.tsx`, before lean4monaco opens its socket.
 
-## Why this works (protocol facts)
+## Why this works (verified against lean4 source; Lean-side pinned to `v4.29.0`)
 
-Verified against `leanprover/lean4` `master`:
+- **`@[server_rpc_method]` needs no server fork.** Registration is
+  environment-extension based: the attribute does `setEnv <| userRpcProcedures.insert …`
+  (`Server/Rpc/RequestHandling.lean:26,115-139`), and dispatch looks the method up
+  in the elaborated document's `snap.env` (`:61-63`). So `import Echo` makes
+  `Echo.collect` available in that worker — no `builtin_initialize`, no rebuild.
+- **Structured payload, no string matching.** `#echo` stamps a `CustomInfo`
+  (`Elab/InfoTree/Types.lean:164`) carrying `EchoInfo` (a `Dynamic`, via
+  `deriving TypeName`); `CommandElabM` has `MonadInfoTree` (`Elab/Command.lean:112`)
+  so `pushInfoLeaf` works. `Echo.collect` reads it with `InfoTree.collectNodesBottomUp`
+  (`Server/InfoUtils.lean:82`) over `doc.cmdSnaps.waitAll` (which resolves once every
+  command snapshot is elaborated). Plain `Array String` result is `RpcEncodable` for
+  free via `[FromJson][ToJson] ⇒ RpcEncodable` (`Server/Rpc/Basic.lean:173`).
+- **`$/lean/fileProgress` is the reliable "done" trigger.** `LeanFileProgressParams`
+  (`Data/Lsp/Extra.lean:96-99`); empty `processing` = that version finished. Per
+  `(uri, version)`, restarts on every edit — so we match the current version.
+- **Version is client-owned.** `didOpen` carries a mandatory `TextDocumentItem.version`
+  (`Basic.lean:307`); `didChange` carries `VersionedTextDocumentIdentifier.version?`
+  (`Basic.lean:147`). The server only echoes the version it is *processing* (can
+  lag), so the proxy reads the authoritative version from the client→server stream.
 
-- **`#echo` output is a normal diagnostic.** `logInfo`/`logInfoAt` surface as
-  information diagnostics through `textDocument/publishDiagnostics`, and
-  `Diagnostic := DiagnosticWith String` with `message : String`
-  (`src/Lean/Data/Lsp/Diagnostics.lean:142,156`) — so `d.message` is a plain
-  string we can prefix-match.
-- **Diagnostics can be incremental.** `PublishDiagnosticsParams.isIncremental?`
-  ("append to the previous set rather than replacing it",
-  `Diagnostics.lean:159-170`) is set to `some true` on follow-up publishes when the
-  client advertises support (`src/Lean/Server/FileWorker/Diagnostics.lean:138-159`).
-  The proxy therefore **appends** when `isIncremental === true` and **replaces**
-  otherwise.
-- **`$/lean/fileProgress` is the reliable "done" signal.** `LeanFileProgressParams`
-  (`src/Lean/Data/Lsp/Extra.lean:96-99`); an empty `processing` array means the
-  document version finished elaborating. Per `(uri, version)`; restarts on every
-  edit — so we match against the current version and fire once.
-- **Version is client-owned.** `didOpen` carries a mandatory
-  `TextDocumentItem.version` (`Basic.lean:307`); `didChange` carries
-  `VersionedTextDocumentIdentifier.version?` (`Basic.lean:147`). The server only
-  echoes the version it is *processing*, which can lag, so the proxy reads the
-  authoritative version from the client→server stream.
+## Proxy mechanics (the fiddly bits)
+
+- **Manual `reader.listen` to swallow our own replies.** `vscode-ws-jsonrpc`'s
+  `forward(to, map)` *always* does `to.writer.write(map(input))`, so it cannot drop
+  a message. We therefore replaced `serverConnection.forward(socketConnection, …)`
+  with `serverConnection.reader.listen(…)`: responses whose `id` is in our
+  `pendingRpc` map are resolved and **not** forwarded; everything else is written to
+  `socketConnection.writer`.
+- **Id hygiene.** Our injected requests use string ids (`echo-N`); the browser uses
+  numeric ids, so `pendingRpc.has(message.id)` can't false-match.
+- **URI form.** We capture the server-side URI from `fileProgress` *before*
+  `FilenamesToUri` rewrites it, so the RPC addresses the document the way
+  `lake serve` names it (the RPC bypasses `urisToFilenames`).
+- **Connect-fresh-per-trigger (no keepAlive).** RPC sessions exist for distributed
+  GC of `WithRpcRef` objects, and expire after `keepAliveTimeMs = 30000`
+  (`Server/FileWorker/Utils.lean:83`), refreshed by `$/lean/rpc/keepAlive`; an
+  expired session makes `rpc/call` throw `rpcNeedsReconnect` (`FileWorker.lean:~789`).
+  But `Echo.collect` returns plain data with **no references**, so the session is
+  just a ticket for the call. We `connect` → `call` back-to-back and let the empty
+  session self-expire — no caching, no keepAlive heartbeat.
+- **Debounce.** The "done" trigger schedules a check at most once per 4000 ms
+  (`scheduleEchoCheck`): the first completion after a quiet gap runs immediately; a
+  burst of completions (rapid edits, the double empty-`processing`) coalesces into a
+  single trailing check that reads the latest version. `firedVersion` guards against
+  duplicate alerts; the pending timer is cleared on socket close.
 
 ## How to test (manual)
 
-1. Build the project so `import Echo` resolves:
-   `cd Projects/Stable && lake build` (or run `leanweb-build.sh`).
-2. Start the dev server + client as usual for lean4web.
-3. Open the **Stable** project in the browser and enter:
+1. Build so `import Echo` resolves: `cd Projects/Stable && lake build` (or run
+   `leanweb-build.sh`).
+2. Start the dev server + client as usual.
+3. Open the **Stable** project and enter:
    ```lean
    import Echo
    #echo "Hello from Lean!"
    ```
-4. When elaboration finishes, a browser `alert()` should pop up reading
-   `Hello from Lean!`. Multiple `#echo`s produce one alert with newline-separated
-   lines. Server console logs `SERVER: Document load complete for <version>`.
-
-> Note: this PoC has **not** been run end-to-end in this environment (no Lean
-> toolchain / live web server here). The Lean module, lakefile, proxy logic, and
-> client tap are written to be coherent, and `server/index.mjs` passes
-> `node --check`, but a live smoke test is still needed.
+4. When elaboration finishes, a browser `alert()` reads `Hello from Lean!`. Multiple
+   `#echo`s give one alert, newline-separated. The server console shows
+   `SERVER: Document load complete for <v>` then `[echo] Echo.collect(v=<v>) -> [...]`,
+   at most once per 4 s.
 
 ## Caveats & limitations
 
-- **Prefix matching is fragile.** Detection keys off the literal `#echo: ` prefix
-  in the diagnostic message. A user info message starting with `#echo: ` would be a
-  false positive. The non-fragile replacement is the proxy-side RPC route described
-  under "Towards a non-fragile version" below — it does **not** require modifying
-  the Lean server.
+- **Re-fires per version.** The alert fires once per *document version*, and every
+  settled edit is a new version — so editing a file that still contains `#echo "Bob"`
+  re-alerts "Bob". This matches the "on document finish loading" goal, but a
+  content-level dedup (only alert when the echo *set* changes) would be friendlier.
 - **Elaboration errors ⇒ undefined behavior**, as requested. We fire on the empty
-  `processing` "done" path; the `fatalError` path (a single `processing:[{kind:2}]`)
-  is not handled, and a `#echo` after an error may or may not have elaborated.
+  `processing` "done" path; the `fatalError` path (`processing:[{kind:2}]`) is not
+  handled.
+- **`position: {0,0}`** in the RPC call assumes the header snapshot's env has `Echo`
+  imported (it does — imports elaborate first). If `Echo.collect` ever returns
+  "unknown method", use a position deeper in the file.
 - **Unknown notification noise.** The injected `$/echo/alert` reaches lean4monaco's
-  language client too, which will log it as an unhandled notification. Harmless,
-  but noisy; a production version might route it differently.
-- **`alert()` is blocking/ugly** — fine for a PoC. Productionizing would use the
-  infoview or a toast.
-- **Argument is a string literal only.** `#echo` currently accepts `str`. Echoing
-  arbitrary terms/expressions would need real elaboration of the argument.
-- **Diagnostic/progress ordering (handled).** The `#echo` diagnostic and the empty
-  `fileProgress` race, and the order flips between initial load and edits: on load
-  the diagnostic lands first; on an edit Lean reuses the snapshot, so the empty
-  `fileProgress` lands first and the diagnostic trails it. The proxy therefore
-  doesn't treat `fileProgress`-done as the sole trigger — `maybeFireEcho()` fires
-  when *both* "elaboration complete" and "≥1 echo collected" hold (whichever lands
-  last), guarded by `firedVersion` so it fires exactly once per version.
-
-## Towards a non-fragile version (chosen forward path: proxy-side RPC)
-
-The plan is to replace the `#echo: ` string-matching with **structured** data over
-a custom RPC method, pulled by the proxy. This needs **no Lean-server modification**;
-a native server→client push notification (which *would* require forking `src/`) is
-**out of scope**.
-
-Shape:
-
-1. **`Echo.lean` (downstream).** Register a request handler with
-   `@[server_rpc_method]` (registration is environment-extension based —
-   `RequestHandling.lean:26,115-139` — so it takes effect simply by the user file
-   doing `import Echo`; no `builtin_initialize`, no rebuild). `#echo "x"` stashes
-   its payload during elaboration (e.g. an environment extension, or an InfoTree
-   `CustomInfo` leaf) so the handler can return the file's echoes as structured
-   data instead of a logged string.
-2. **Proxy (`server/index.mjs`).** Keep the existing `$/lean/fileProgress`-done
-   trigger and version tracking. On "done", instead of scraping diagnostics, the
-   proxy issues `$/lean/rpc/connect` then `$/lean/rpc/call` (method = the registered
-   name) toward `lake serve`, reads the structured echoes from the response, and
-   injects `$/echo/alert` to the browser exactly as today.
-3. **Client tap.** Unchanged.
-
-Open issues to settle when prototyping the proxy side:
-- **JSON-RPC id hygiene:** the proxy must mint its own request ids that can't
-  collide with the client's (e.g. string ids like `"echo-1"`).
-- **Response suppression:** responses to the proxy's *own* rpc requests must be
-  consumed, not forwarded to the browser as spurious replies — verify whether
-  returning a falsy value from the `forward` map fn actually drops the message.
-- **RPC session lifetime:** `rpc/connect` yields a `sessionId`; consider keepalive
-  / reconnect, though for a single collect-on-done call it can be short-lived.
+  language client too, which logs it as unhandled. Harmless but noisy.
+- **`alert()` is blocking/ugly** — fine for a PoC; productionize with the infoview or
+  a toast.
+- **Argument is a string literal only.** `#echo` accepts `str`; echoing arbitrary
+  terms would need real elaboration of the argument.
+- **Out of scope:** a *native* server→client push notification (which would delete
+  the proxy/`fileProgress` scaffolding) — that one genuinely requires forking `src/`.
+- **Debug logging.** `server/index.mjs` retains `[echo]` console logging for now.
 
 ## Files changed
 
-- `Projects/Stable/Echo.lean` (new) — the `#echo` command.
+- `Projects/Stable/Echo.lean` (new) — `#echo` command (InfoTree marker, no
+  diagnostic) + `@[server_rpc_method] Echo.collect`.
 - `Projects/Stable/lakefile.toml` — add `Echo` lib + default target.
-- `server/index.mjs` — per-connection echo collection, race-tolerant
-  `maybeFireEcho()` + `$/echo/alert` injection. (Retains `[echo]` debug logging.)
+- `server/index.mjs` — manual `reader.listen` server→client path; debounced,
+  connect-fresh `Echo.collect` RPC pull on `fileProgress`-done; `$/echo/alert`
+  injection. (Retains `[echo]` debug logging.)
 - `client/src/echo-alert.ts` (new) — passive WebSocket tap → `alert()`.
 - `client/src/index.tsx` — side-effect import of the tap.

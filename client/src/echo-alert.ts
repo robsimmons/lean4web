@@ -42,8 +42,11 @@ class EchoObservingWebSocket extends NativeWebSocket {
       if (msg?.method !== '$/echo/alert') return
       console.debug('[echo] $/echo/alert received:', msg.params)
       const messages: string[] = msg.params?.messages ?? []
+      const hasErrors: boolean = msg.params?.hasErrors ?? false
       if (messages.length > 0) {
-        window.alert(messages.join('\n'))
+        const text =
+          messages.join('\n') + (hasErrors ? '\n\n(compiled with errors)' : '')
+        window.alert(text)
       }
     })
   }

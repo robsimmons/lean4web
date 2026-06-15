@@ -294,38 +294,79 @@ wss.addListener("connection", async function (ws, req) {
   const serverConnection = jsonrpcserver.createProcessStreamConnection(ps);
 
   // --- `#echo` proof-of-concept state (per connection) ---
-  // `currentVersion`: the document version the client is currently editing.
-  // `echoes`: the `#echo` messages collected from diagnostics for that version.
-  // `currentVersionComplete`: whether elaboration finished for that version.
-  // `firedVersion`: the version we've already alerted for (fire-once guard).
-  let currentVersion = NaN;
-  let currentVersionComplete = false;
-  let echoes = [];
-  let firedVersion = NaN;
+  // Non-fragile path: on the `$/lean/fileProgress`-done trigger we *pull* the
+  // file's `#echo`s from the Lean server via the `Echo.collect` RPC method
+  // (registered downstream by `import Echo`), then inject `$/echo/alert` to the
+  // browser. No diagnostic string-matching.
+  let currentVersion = NaN; // version the client is editing (from didOpen/didChange)
+  let currentVersionComplete = false; // RPC already issued for currentVersion?
+  let firedVersion = NaN; // version we've already alerted for (fire-once guard)
+  let currentUri = null; // server-side document URI (as `lake serve` names it)
 
-  // Fire once per version, when elaboration is done AND we've collected at least
-  // one `#echo`. The two signals race: on load the diagnostic lands before the
-  // empty `fileProgress`, but on edits the empty `fileProgress` lands first and
-  // the diagnostic follows — so we call this from both sites and let whichever
-  // completes the pair do the injection.
-  function maybeFireEcho() {
-    if (
-      currentVersionComplete &&
-      echoes.length > 0 &&
-      firedVersion !== currentVersion
-    ) {
-      firedVersion = currentVersion;
+  // RPC plumbing: we send requests straight to `lake serve` (serverConnection),
+  // tag them with string ids that can't collide with the client's numeric ids,
+  // and resolve them from the server->client listener below.
+  let rpcIdCounter = 0;
+  const pendingRpc = new Map(); // id -> { resolve, reject }
+
+  function sendServerRequest(method, params) {
+    const id = `echo-${++rpcIdCounter}`;
+    return new Promise((resolve, reject) => {
+      pendingRpc.set(id, { resolve, reject });
+      serverConnection.writer.write({ jsonrpc: "2.0", id, method, params });
+    });
+  }
+
+  // Pull `#echo`s for (uri, version) over RPC and alert the browser, once.
+  // Connect-fresh-per-trigger: `Echo.collect` returns plain data (no
+  // `WithRpcRef`), so the session is just a ticket for the call — we create one,
+  // use it immediately, and let it self-expire (~30s), sidestepping keepAlive.
+  async function collectAndAlert(uri, version) {
+    if (firedVersion === version) return;
+    try {
+      const { sessionId } = await sendServerRequest("$/lean/rpc/connect", { uri });
+      const result = await sendServerRequest("$/lean/rpc/call", {
+        textDocument: { uri },
+        position: { line: 0, character: 0 },
+        sessionId,
+        method: "Echo.collect",
+        params: {},
+      });
+      const messages = result?.messages ?? [];
+      const hasErrors = result?.hasErrors ?? false;
       console.log(
-        `[echo] firing $/echo/alert for v=${currentVersion}: ${JSON.stringify(echoes)}`,
+        `[echo] Echo.collect(v=${version}) -> ${JSON.stringify(messages)} hasErrors=${hasErrors}`,
       );
-      ws.send(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          method: "$/echo/alert",
-          params: { version: currentVersion, messages: echoes },
-        }),
-      );
+      if (messages.length > 0 && firedVersion !== version) {
+        firedVersion = version;
+        ws.send(
+          JSON.stringify({
+            jsonrpc: "2.0",
+            method: "$/echo/alert",
+            params: { version, messages, hasErrors },
+          }),
+        );
+      }
+    } catch (e) {
+      console.log(`[echo] Echo.collect failed: ${e?.message ?? e}`);
     }
+  }
+
+  // Debounce the post-`fileProgress`-done check to at most once per 4000ms.
+  // Bursts of completions (rapid edits, the double empty-`processing`) coalesce
+  // into a single trailing check that reads whatever the latest version is then.
+  const ECHO_CHECK_INTERVAL_MS = 4000;
+  let lastEchoCheckMs = 0;
+  let echoCheckTimer = null;
+
+  function scheduleEchoCheck() {
+    if (echoCheckTimer !== null) return; // a check is pending; it'll see latest state
+    const wait = Math.max(0, ECHO_CHECK_INTERVAL_MS - (Date.now() - lastEchoCheckMs));
+    echoCheckTimer = setTimeout(() => {
+      echoCheckTimer = null;
+      lastEchoCheckMs = Date.now();
+      collectAndAlert(currentUri, currentVersion);
+    }, wait);
   }
 
   socketConnection.forward(serverConnection, (message) => {
@@ -341,11 +382,7 @@ wss.addListener("connection", async function (ws, req) {
     ) {
       currentVersion = message.params.textDocument.version;
       currentVersionComplete = false;
-      echoes = [];
-      console.log(
-        "CLIENT: Document version now " +
-          message.params.textDocument.version,
-      );
+      console.log("CLIENT: Document version now " + currentVersion);
     }
 
     if (isDevelopment && !isGithubAction) {
@@ -353,45 +390,43 @@ wss.addListener("connection", async function (ws, req) {
     }
     return message;
   });
-  serverConnection.forward(socketConnection, (message) => {
+
+  // We replace `serverConnection.forward(socketConnection, ...)` with a manual
+  // `reader.listen` so we can *intercept* responses to our own injected RPC
+  // requests and NOT forward them to the browser — `forward` always writes the
+  // mapped message, so it cannot drop one.
+  serverConnection.reader.listen((message) => {
+    // (1) Intercept responses to our injected RPC requests (string ids).
+    if (
+      message.id !== undefined &&
+      pendingRpc.has(message.id) &&
+      (message.result !== undefined || message.error !== undefined)
+    ) {
+      const { resolve, reject } = pendingRpc.get(message.id);
+      pendingRpc.delete(message.id);
+      if (message.error !== undefined)
+        reject(new Error(JSON.stringify(message.error)));
+      else resolve(message.result);
+      return; // swallow: the browser never sent this, so never forward it
+    }
+
+    // (2) Capture the server-side URI from `fileProgress` BEFORE rewriting it,
+    // so the RPC call addresses the document the way `lake serve` names it.
+    if (message.method === "$/lean/fileProgress") {
+      currentUri = message.params.textDocument.uri;
+    }
+
     const prefix = isDevelopment ? PROJECTS_BASE_PATH : "";
     FilenamesToUri(prefix, message);
-
-    // Collect `#echo` messages as they are published as information diagnostics.
-    // `Echo.lean` logs each `#echo "..."` as `#echo: ...`. Lean may publish
-    // diagnostics incrementally (`isIncremental: true` => append to the previous
-    // set) or as a full set (replace), so we mirror that here.
-    if (message.method === "textDocument/publishDiagnostics") {
-      const allMsgs = (message.params.diagnostics ?? []).map((d) => d.message);
-      console.log(
-        `[echo] publishDiagnostics v=${message.params.version} current=${currentVersion}` +
-          ` incremental=${message.params.isIncremental} n=${allMsgs.length}` +
-          ` msgs=${JSON.stringify(allMsgs)}`,
-      );
-      if (message.params.version === currentVersion) {
-        const MARKER = "#echo: ";
-        const found = allMsgs
-          .filter((m) => typeof m === "string" && m.startsWith(MARKER))
-          .map((m) => m.slice(MARKER.length));
-        echoes = message.params.isIncremental === true ? echoes.concat(found) : found;
-        console.log(`[echo] echoes now = ${JSON.stringify(echoes)}`);
-        maybeFireEcho(); // diagnostic may arrive after fileProgress-done (edits)
-      } else {
-        console.log(
-          `[echo] (version mismatch -> not collecting; ` +
-            `diag v=${message.params.version} != current=${currentVersion})`,
-        );
-      }
-    }
 
     if (message.method === "$/lean/fileProgress") {
       console.log(
         `[echo] fileProgress v=${message.params.textDocument.version} current=${currentVersion}` +
-          ` processing=${message.params.processing.length}` +
-          ` complete=${currentVersionComplete} echoes=${echoes.length}`,
+          ` processing=${message.params.processing.length} complete=${currentVersionComplete}`,
       );
     }
 
+    // (3) Trigger: elaboration finished for the client's current version.
     if (
       message.method === "$/lean/fileProgress" &&
       message.params.processing.length === 0 &&
@@ -400,22 +435,22 @@ wss.addListener("connection", async function (ws, req) {
     ) {
       currentVersionComplete = true;
       console.log("SERVER: Document load complete for " + currentVersion);
-
-      // PoC: ask the browser to alert() if this file contained any `#echo`s.
-      // The injection itself happens in `maybeFireEcho` (the `#echo` diagnostic
-      // may not have arrived yet on edits), via a passive tap in the client
-      // (client/src/echo-alert.ts) that surfaces it as an alert.
-      maybeFireEcho();
+      // Debounced; the actual RPC pull runs fire-and-forget and resolves via the
+      // interception branch above.
+      scheduleEchoCheck();
     }
 
     if (isDevelopment && !isGithubAction) {
       //console.log(`SERVER: ${JSON.stringify(message)}`);
     }
-    return message;
+
+    // (4) Forward everything else to the browser.
+    socketConnection.writer.write(message);
   });
 
   ws.on("close", () => {
     socketCounter -= 1;
+    if (echoCheckTimer !== null) clearTimeout(echoCheckTimer);
     if (!isGithubAction) {
       console.log(`[${new Date()}] Socket closed - ${ip}`);
       logStats();
