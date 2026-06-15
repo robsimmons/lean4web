@@ -5,18 +5,14 @@ import { faCode } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useAtom } from 'jotai/react'
-import {
-  LeanClient,
-  LeanMonaco,
-  LeanMonacoEditor,
-  LeanMonacoOptions,
-} from 'lean4monaco'
+import { LeanMonaco, LeanMonacoEditor, LeanMonacoOptions } from 'lean4monaco'
 import * as monaco from 'monaco-editor'
 import * as path from 'path'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Split from 'react-split'
 
 import LeanLogo from './assets/logo.svg'
+import { installEchoObserver } from './echo'
 import { codeAtom } from './editor/code-atoms'
 import { Menu } from './navigation/Navigation'
 import { mobileAtom, settingsAtom } from './settings/settings-atoms'
@@ -118,29 +114,9 @@ function App() {
     ;(async () => {
       await _leanMonaco.start(options)
 
-      // `#echo` proof of concept: the server proxy injects a custom
-      // `$/echo/alert` LSP notification once a document containing `#echo "..."`
-      // finishes elaborating. We observe it through lean4monaco's public client
-      // surface — `LeanClient.customNotification` fires for every notification
-      // not defined in standard LSP — rather than tapping the raw websocket.
-      const registerEcho = (client: LeanClient) =>
-        echoDisposables.push(
-          client.customNotification(({ method, params }: { method: string; params: any }) => {
-            if (method !== '$/echo/alert') return
-            const messages: string[] = params?.messages ?? []
-            const hasErrors: boolean = params?.hasErrors ?? false
-            if (messages.length > 0) {
-              window.alert(
-                messages.join('\n') +
-                  (hasErrors ? '\n\n(compiled with errors)' : ''),
-              )
-            }
-          }),
-        )
-      _leanMonaco.clientProvider?.getClients().forEach(registerEcho)
-      if (_leanMonaco.clientProvider) {
-        echoDisposables.push(_leanMonaco.clientProvider.clientAdded(registerEcho))
-      }
+      // `#echo` proof of concept: watch for "document finished elaborating" and
+      // pull the file's `#echo`s over RPC, all client-side (see `./echo`).
+      echoDisposables.push(installEchoObserver(_leanMonaco))
 
       await leanMonacoEditor.start(
         editorRef.current!,

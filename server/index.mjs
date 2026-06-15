@@ -292,83 +292,6 @@ wss.addListener("connection", async function (ws, req) {
     ws.close(),
   );
   const serverConnection = jsonrpcserver.createProcessStreamConnection(ps);
-
-  // --- `#echo` proof-of-concept state (per connection) ---
-  // Non-fragile path: on the `$/lean/fileProgress`-done trigger we *pull* the
-  // file's `#echo`s from the Lean server via the `Echo.collect` RPC method
-  // (registered downstream by `import Echo`), then inject `$/echo/alert` to the
-  // browser. No diagnostic string-matching.
-  let currentVersion = NaN; // version the client is editing (from didOpen/didChange)
-  let currentVersionComplete = false; // RPC already issued for currentVersion?
-  let firedVersion = NaN; // version we've already alerted for (fire-once guard)
-  let currentUri = null; // server-side document URI (as `lake serve` names it)
-
-  // RPC plumbing: we send requests straight to `lake serve` (serverConnection),
-  // tag them with string ids that can't collide with the client's numeric ids,
-  // and resolve them from the server->client listener below.
-  let rpcIdCounter = 0;
-  const pendingRpc = new Map(); // id -> { resolve, reject }
-
-  function sendServerRequest(method, params) {
-    const id = `echo-${++rpcIdCounter}`;
-    return new Promise((resolve, reject) => {
-      pendingRpc.set(id, { resolve, reject });
-      serverConnection.writer.write({ jsonrpc: "2.0", id, method, params });
-    });
-  }
-
-  // Pull `#echo`s for (uri, version) over RPC and alert the browser, once.
-  // Connect-fresh-per-trigger: `Echo.collect` returns plain data (no
-  // `WithRpcRef`), so the session is just a ticket for the call — we create one,
-  // use it immediately, and let it self-expire (~30s), sidestepping keepAlive.
-  async function collectAndAlert(uri, version) {
-    if (firedVersion === version) return;
-    try {
-      const { sessionId } = await sendServerRequest("$/lean/rpc/connect", { uri });
-      const result = await sendServerRequest("$/lean/rpc/call", {
-        textDocument: { uri },
-        position: { line: 0, character: 0 },
-        sessionId,
-        method: "Echo.collect",
-        params: {},
-      });
-      const messages = result?.messages ?? [];
-      const hasErrors = result?.hasErrors ?? false;
-      console.log(
-        `[echo] Echo.collect(v=${version}) -> ${JSON.stringify(messages)} hasErrors=${hasErrors}`,
-      );
-      if (messages.length > 0 && firedVersion !== version) {
-        firedVersion = version;
-        ws.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            method: "$/echo/alert",
-            params: { version, messages, hasErrors },
-          }),
-        );
-      }
-    } catch (e) {
-      console.log(`[echo] Echo.collect failed: ${e?.message ?? e}`);
-    }
-  }
-
-  // Debounce the post-`fileProgress`-done check to at most once per 4000ms.
-  // Bursts of completions (rapid edits, the double empty-`processing`) coalesce
-  // into a single trailing check that reads whatever the latest version is then.
-  const ECHO_CHECK_INTERVAL_MS = 4000;
-  let lastEchoCheckMs = 0;
-  let echoCheckTimer = null;
-
-  function scheduleEchoCheck() {
-    if (echoCheckTimer !== null) return; // a check is pending; it'll see latest state
-    const wait = Math.max(0, ECHO_CHECK_INTERVAL_MS - (Date.now() - lastEchoCheckMs));
-    echoCheckTimer = setTimeout(() => {
-      echoCheckTimer = null;
-      lastEchoCheckMs = Date.now();
-      collectAndAlert(currentUri, currentVersion);
-    }, wait);
-  }
-
   socketConnection.forward(serverConnection, (message) => {
     const prefix = isDevelopment ? PROJECTS_BASE_PATH : "";
 
@@ -376,81 +299,22 @@ wss.addListener("connection", async function (ws, req) {
       urisToFilenames(prefix, message);
     }
 
-    if (
-      message.method === "textDocument/didOpen" ||
-      message.method === "textDocument/didChange"
-    ) {
-      currentVersion = message.params.textDocument.version;
-      currentVersionComplete = false;
-      console.log("CLIENT: Document version now " + currentVersion);
-    }
-
     if (isDevelopment && !isGithubAction) {
-      //console.log(`CLIENT: ${JSON.stringify(message)}`);
+      console.log(`CLIENT: ${JSON.stringify(message)}`);
+    }
+    return message;
+  });
+  serverConnection.forward(socketConnection, (message) => {
+    const prefix = isDevelopment ? PROJECTS_BASE_PATH : "";
+    FilenamesToUri(prefix, message);
+    if (isDevelopment && !isGithubAction) {
+      console.log(`SERVER: ${JSON.stringify(message)}`);
     }
     return message;
   });
 
-  // We replace `serverConnection.forward(socketConnection, ...)` with a manual
-  // `reader.listen` so we can *intercept* responses to our own injected RPC
-  // requests and NOT forward them to the browser — `forward` always writes the
-  // mapped message, so it cannot drop one.
-  serverConnection.reader.listen((message) => {
-    // (1) Intercept responses to our injected RPC requests (string ids).
-    if (
-      message.id !== undefined &&
-      pendingRpc.has(message.id) &&
-      (message.result !== undefined || message.error !== undefined)
-    ) {
-      const { resolve, reject } = pendingRpc.get(message.id);
-      pendingRpc.delete(message.id);
-      if (message.error !== undefined)
-        reject(new Error(JSON.stringify(message.error)));
-      else resolve(message.result);
-      return; // swallow: the browser never sent this, so never forward it
-    }
-
-    // (2) Capture the server-side URI from `fileProgress` BEFORE rewriting it,
-    // so the RPC call addresses the document the way `lake serve` names it.
-    if (message.method === "$/lean/fileProgress") {
-      currentUri = message.params.textDocument.uri;
-    }
-
-    const prefix = isDevelopment ? PROJECTS_BASE_PATH : "";
-    FilenamesToUri(prefix, message);
-
-    if (message.method === "$/lean/fileProgress") {
-      console.log(
-        `[echo] fileProgress v=${message.params.textDocument.version} current=${currentVersion}` +
-          ` processing=${message.params.processing.length} complete=${currentVersionComplete}`,
-      );
-    }
-
-    // (3) Trigger: elaboration finished for the client's current version.
-    if (
-      message.method === "$/lean/fileProgress" &&
-      message.params.processing.length === 0 &&
-      message.params.textDocument.version === currentVersion &&
-      !currentVersionComplete
-    ) {
-      currentVersionComplete = true;
-      console.log("SERVER: Document load complete for " + currentVersion);
-      // Debounced; the actual RPC pull runs fire-and-forget and resolves via the
-      // interception branch above.
-      scheduleEchoCheck();
-    }
-
-    if (isDevelopment && !isGithubAction) {
-      //console.log(`SERVER: ${JSON.stringify(message)}`);
-    }
-
-    // (4) Forward everything else to the browser.
-    socketConnection.writer.write(message);
-  });
-
   ws.on("close", () => {
     socketCounter -= 1;
-    if (echoCheckTimer !== null) clearTimeout(echoCheckTimer);
     if (!isGithubAction) {
       console.log(`[${new Date()}] Socket closed - ${ip}`);
       logStats();
