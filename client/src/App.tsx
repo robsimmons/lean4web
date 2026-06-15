@@ -5,7 +5,12 @@ import { faCode } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useAtom } from 'jotai/react'
-import { LeanMonaco, LeanMonacoEditor, LeanMonacoOptions } from 'lean4monaco'
+import {
+  LeanClient,
+  LeanMonaco,
+  LeanMonacoEditor,
+  LeanMonacoOptions,
+} from 'lean4monaco'
 import * as monaco from 'monaco-editor'
 import * as path from 'path'
 import { useCallback, useEffect, useRef, useState } from 'react'
@@ -107,10 +112,36 @@ function App() {
     console.debug('[Lean4web] Restarting editor')
     var _leanMonaco = new LeanMonaco()
     var leanMonacoEditor = new LeanMonacoEditor()
+    const echoDisposables: { dispose(): void }[] = []
 
     _leanMonaco.setInfoviewElement(infoviewRef.current!)
     ;(async () => {
       await _leanMonaco.start(options)
+
+      // `#echo` proof of concept: the server proxy injects a custom
+      // `$/echo/alert` LSP notification once a document containing `#echo "..."`
+      // finishes elaborating. We observe it through lean4monaco's public client
+      // surface — `LeanClient.customNotification` fires for every notification
+      // not defined in standard LSP — rather than tapping the raw websocket.
+      const registerEcho = (client: LeanClient) =>
+        echoDisposables.push(
+          client.customNotification(({ method, params }: { method: string; params: any }) => {
+            if (method !== '$/echo/alert') return
+            const messages: string[] = params?.messages ?? []
+            const hasErrors: boolean = params?.hasErrors ?? false
+            if (messages.length > 0) {
+              window.alert(
+                messages.join('\n') +
+                  (hasErrors ? '\n\n(compiled with errors)' : ''),
+              )
+            }
+          }),
+        )
+      _leanMonaco.clientProvider?.getClients().forEach(registerEcho)
+      if (_leanMonaco.clientProvider) {
+        echoDisposables.push(_leanMonaco.clientProvider.clientAdded(registerEcho))
+      }
+
       await leanMonacoEditor.start(
         editorRef.current!,
         path.join(project.folder, `${project.folder}.lean`),
@@ -199,6 +230,7 @@ function App() {
       })
     })()
     return () => {
+      echoDisposables.forEach((d) => d.dispose())
       leanMonacoEditor.dispose()
       _leanMonaco.dispose()
     }
