@@ -8,16 +8,23 @@ import * as url from 'node:url'
 import express from 'express'
 import anonymize from 'ip-anonymize'
 import nocache from 'nocache'
-import * as rpc from 'vscode-ws-jsonrpc'
 import * as jsonrpcserver from 'vscode-ws-jsonrpc/server'
 import { WebSocketServer } from 'ws'
 
 import { zLeanWebProjectConfig } from './types.mjs'
+import {
+  LspSessionCoordinator,
+  parseLspWebSocketRequest,
+} from './lsp-sessions.mjs'
+import { createLspWebSocketTransports } from './lsp-transports.mjs'
 
-let socketCounter = 0
+let physicalSocketCounter = 0
+let logicalSessionCounter = 0
 
 function logStats() {
-  console.log(`[${new Date()}] Number of open sockets - ${socketCounter}`)
+  console.log(
+    `[${new Date()}] Open LSP sockets - ${physicalSocketCounter}; logical LSP sessions - ${logicalSessionCounter}`,
+  )
   console.log(
     `[${new Date()}] Free RAM - ${Math.round(os.freemem() / 1024 / 1024)} / ${Math.round(os.totalmem() / 1024 / 1024)} MB`,
   )
@@ -280,6 +287,67 @@ function FilenamesToUri(prefix, obj) {
   return obj
 }
 
+function startLspSession(project, channels, closeSession) {
+  const ps = startServerProcess(project)
+  if (!ps || !ps.stdout || !ps.stdin) {
+    throw new Error(`Could not start Lean server for project ${project}`)
+  }
+
+  const { reader, writer } = createLspWebSocketTransports(channels)
+  const socketConnection = jsonrpcserver.createConnection(reader, writer, () =>
+    closeSession(1000, 'LSP socket connection closed'),
+  )
+  const serverConnection = jsonrpcserver.createProcessStreamConnection(ps)
+  if (!serverConnection) {
+    ps.kill()
+    throw new Error(`Lean server for project ${project} has no stdio transport`)
+  }
+
+  let disposed = false
+  const connectionDisposables = [
+    socketConnection.onClose(() =>
+      closeSession(1000, 'LSP socket connection closed'),
+    ),
+    serverConnection.onClose(() =>
+      closeSession(1011, 'Lean server connection closed'),
+    ),
+  ]
+  ps.once('error', () => closeSession(1011, 'Lean server process failed'))
+  ps.once('close', () => closeSession(1011, 'Lean server process exited'))
+
+  socketConnection.forward(serverConnection, (message) => {
+    const prefix = isDevelopment ? PROJECTS_BASE_PATH : ''
+
+    if (message.method != 'textDocument/definition') {
+      urisToFilenames(prefix, message)
+    }
+
+    if (isDevelopment && !isGithubAction) {
+      console.log(`CLIENT: ${JSON.stringify(message)}`)
+    }
+    return message
+  })
+  serverConnection.forward(socketConnection, (message) => {
+    const prefix = isDevelopment ? PROJECTS_BASE_PATH : ''
+    FilenamesToUri(prefix, message)
+    if (isDevelopment && !isGithubAction) {
+      console.log(`SERVER: ${JSON.stringify(message)}`)
+    }
+    return message
+  })
+
+  return {
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      connectionDisposables.forEach((disposable) => disposable.dispose())
+      reader.dispose()
+      writer.dispose()
+      serverConnection.dispose()
+    },
+  }
+}
+
 if (ENABLE_COLLAB) {
   console.log('[Lean4web]: enabling signaling server for collaboration.')
 }
@@ -390,99 +458,105 @@ const setupYjsConnection = (conn, req) => {
   })
 }
 
-wss.addListener('connection', async function (ws, req) {
-  const urlRegEx = /^\/websocket\/([\w.-]+)$/
-  const reRes = urlRegEx.exec(req.url)
-  if (!reRes) {
-    if (
-      ENABLE_COLLAB &&
-      (req.url === '/yjs-signaling' || req.url === '/yjs-signaling/')
-    ) {
-      setupYjsConnection(ws, req)
-      return
+const trackPhysicalSocket = (ws, ip) => {
+  physicalSocketCounter += 1
+  if (!isGithubAction) {
+    console.log(`[${new Date()}] LSP socket opened - ${ip}`)
+    logStats()
+  }
+  ws.once('close', () => {
+    physicalSocketCounter -= 1
+    if (!isGithubAction) {
+      console.log(`[${new Date()}] LSP socket closed - ${ip}`)
+      logStats()
     }
+  })
+}
+
+const pairedSessions = new LspSessionCoordinator({
+  startSession: ({ project, channels, close }) =>
+    startLspSession(project, channels, close),
+  onSessionStarted: () => {
+    logicalSessionCounter += 1
+    if (!isGithubAction) logStats()
+  },
+  onSessionClosed: () => {
+    logicalSessionCounter -= 1
+    if (!isGithubAction) logStats()
+  },
+})
+
+wss.addListener('connection', function (ws, req) {
+  if (
+    ENABLE_COLLAB &&
+    (req.url === '/yjs-signaling' || req.url === '/yjs-signaling/')
+  ) {
+    setupYjsConnection(ws, req)
+    return
+  }
+
+  const request = parseLspWebSocketRequest(req.url)
+  if (!request) {
     console.error(
       `[Lean4web]: connection refused because of invalid URL: ${req.url}`,
     )
-    return
-  }
-  const project = reRes[1]
-
-  if (!project.match(/^[a-zA-Z][a-zA-Z1-9.-_]*/)) {
-    console.error(
-      `Connection refused because of invalid project name: ${project}`,
-    )
+    ws.close(1008, 'Invalid WebSocket URL')
     return
   }
 
   const ip = anonymize(
     req.headers['x-forwarded-for'] || req.socket.remoteAddress,
   )
-  const ps = await startServerProcess(project)
+  trackPhysicalSocket(ws, ip)
 
-  if (ps === null) {
-    console.error(
-      `Connection refused because of nonexistent project directory: ${project}`,
-    )
+  if (request.kind === 'invalid') {
+    console.error(`[Lean4web]: connection refused: ${request.reason}`)
+    ws.close(1008, request.reason)
     return
   }
 
-  const reader = new rpc.WebSocketMessageReader({
-    onMessage: (cb) => {
-      ws.on('message', cb)
-    },
-    onError: (cb) => {
-      ws.on('error', cb)
-    },
-    onClose: (cb) => {
-      ws.on('close', cb)
-    },
-  })
-  const writer = new rpc.WebSocketMessageWriter({
-    send: (data, cb) => {
-      ws.send(data, cb)
-    },
-  })
-  const socketConnection = jsonrpcserver.createConnection(reader, writer, () =>
-    ws.close(),
-  )
-  const serverConnection = jsonrpcserver.createProcessStreamConnection(ps)
-  socketConnection.forward(serverConnection, (message) => {
-    const prefix = isDevelopment ? PROJECTS_BASE_PATH : ''
-
-    if (message.method != 'textDocument/definition') {
-      urisToFilenames(prefix, message)
+  if (request.kind === 'dual') {
+    try {
+      pairedSessions.attach({
+        project: request.project,
+        sessionId: request.sessionId,
+        channel: request.channel,
+        socket: ws,
+      })
+    } catch (error) {
+      console.error(`[Lean4web]: failed to start paired LSP session: ${error}`)
     }
+    return
+  }
 
-    if (isDevelopment && !isGithubAction) {
-      console.log(`CLIENT: ${JSON.stringify(message)}`)
+  let closed = false
+  let counted = false
+  let transport
+  const closeLegacySession = (
+    code = 1000,
+    reason = 'Legacy LSP session closed',
+  ) => {
+    if (closed) return
+    closed = true
+    if (ws.readyState === 0 || ws.readyState === 1) ws.close(code, reason)
+    transport?.dispose()
+    if (counted) logicalSessionCounter -= 1
+    if (!isGithubAction) logStats()
+  }
+
+  try {
+    transport = startLspSession(request.project, { lo: ws }, closeLegacySession)
+    if (closed) {
+      transport.dispose()
+      return
     }
-    return message
-  })
-  serverConnection.forward(socketConnection, (message) => {
-    const prefix = isDevelopment ? PROJECTS_BASE_PATH : ''
-    FilenamesToUri(prefix, message)
-    if (isDevelopment && !isGithubAction) {
-      console.log(`SERVER: ${JSON.stringify(message)}`)
-    }
-    return message
-  })
-
-  ws.on('close', () => {
-    socketCounter -= 1
-    if (!isGithubAction) {
-      console.log(`[${new Date()}] Socket closed - ${ip}`)
-      logStats()
-    }
-  })
-
-  socketConnection.onClose(() => serverConnection.dispose())
-  serverConnection.onClose(() => socketConnection.dispose())
-
-  socketCounter += 1
-  if (!isGithubAction) {
-    console.log(`[${new Date()}] Socket opened - ${ip}`)
-    logStats()
+    counted = true
+    logicalSessionCounter += 1
+    if (!isGithubAction) logStats()
+    ws.once('close', () => closeLegacySession())
+  } catch (error) {
+    console.error(`[Lean4web]: failed to start legacy LSP session: ${error}`)
+    closeLegacySession(1011, 'Failed to start Lean server')
   }
 })
 
