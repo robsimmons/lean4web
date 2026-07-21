@@ -207,7 +207,10 @@ function App() {
       project.folder
     console.log(`[Lean4web] Socket url is ${socketUrl}`)
     var _options: LeanMonacoOptions = {
-      websocket: { url: socketUrl },
+      websocket: {
+        url: socketUrl,
+        prioritizeServerMessages: settings.prioritizeServerMessages,
+      },
       // Restrict monaco's extend (e.g. context menu) to the editor itself
       htmlElement: editorRef.current ?? undefined,
       vscode: {

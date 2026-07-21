@@ -2,6 +2,8 @@ import * as rpc from 'vscode-ws-jsonrpc'
 
 const FILE_PROGRESS_METHOD = '$/lean/fileProgress'
 const RPC_CALL_METHOD = '$/lean/rpc/call'
+const SET_SERVER_MESSAGE_PRIORITIZATION_METHOD =
+  '$/lean4web/setServerMessagePrioritization'
 const HIGH_PRIORITY_RPC_METHODS = new Set([
   'Lean.Widget.getInteractiveGoals',
   'Lean.Widget.getInteractiveTermGoal',
@@ -41,15 +43,14 @@ export function createMergedMessageReader(readers) {
   }
 }
 
-function createObservedMessageReader(reader, observeMessage) {
+function createFilteredMessageReader(reader, filterMessage) {
   return {
     onError: reader.onError,
     onClose: reader.onClose,
     onPartialMessage: reader.onPartialMessage,
     listen: (callback) =>
       reader.listen((message) => {
-        observeMessage(message)
-        callback(message)
+        if (filterMessage(message)) callback(message)
       }),
     dispose: () => reader.dispose(),
   }
@@ -64,18 +65,31 @@ export function selectServerChannel(message) {
 /** Tracks the client requests whose otherwise-unmarked responses belong on hi. */
 export function createServerChannelRouter() {
   const highPriorityResponseIds = new Set()
+  let prioritizationEnabled = true
 
   return {
-    observeClientMessage: (message) => {
+    filterClientMessage: (message) => {
+      if (message?.method === SET_SERVER_MESSAGE_PRIORITIZATION_METHOD) {
+        if (typeof message.params?.enabled === 'boolean') {
+          prioritizationEnabled = message.params.enabled
+          if (!prioritizationEnabled) highPriorityResponseIds.clear()
+        }
+        return false
+      }
+
       if (
+        prioritizationEnabled &&
         message?.method === RPC_CALL_METHOD &&
         HIGH_PRIORITY_RPC_METHODS.has(message.params?.method) &&
         hasOwn(message, 'id')
       ) {
         highPriorityResponseIds.add(message.id)
       }
+      return true
     },
     selectServerChannel: (message) => {
+      if (!prioritizationEnabled) return 'lo'
+
       const defaultChannel = selectServerChannel(message)
       if (defaultChannel === 'hi') return defaultChannel
 
@@ -150,7 +164,7 @@ export function createLspWebSocketTransports(channels, selectChannel) {
 
   return {
     reader: router
-      ? createObservedMessageReader(combinedReader, router.observeClientMessage)
+      ? createFilteredMessageReader(combinedReader, router.filterClientMessage)
       : combinedReader,
     writer: createChannelMessageWriter(channelWriters, effectiveSelectChannel),
   }

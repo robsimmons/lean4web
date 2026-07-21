@@ -17,6 +17,10 @@ export function decodeSettingsFromURL(
     ),
     mobile: parseBooleanSearchParam(searchParams, 'mobile'),
     compress: parseBooleanSearchParam(searchParams, 'compress'),
+    prioritizeServerMessages: parseBooleanSearchParam(
+      searchParams,
+      'prioritizeServerMessages',
+    ),
     ruler: parseNumber(searchParams, 'ruler'),
     showGoalNames: parseBooleanSearchParam(searchParams, 'showGoalNames'),
     showExpectedType: parseBooleanSearchParam(searchParams, 'showExpectedType'),

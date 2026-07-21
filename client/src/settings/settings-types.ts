@@ -10,6 +10,8 @@ export interface Settings {
   showExpectedType: boolean
   /** Compress the `code=` in the URL into `codez=` using LZ-string */
   compress: boolean
+  /** Send interactive server messages on the high-priority channel */
+  prioritizeServerMessages: boolean
   /** If present, show a ruler at the specified position */
   ruler?: number
   /** Display code editor and infoview in narrow, vertically stacked, mobile-friendly mode.
@@ -42,6 +44,7 @@ export const defaultSettings: UserSettings = {
   showGoalNames: true,
   showExpectedType: false,
   compress: true,
+  prioritizeServerMessages: true,
   mobile: 'auto',
   theme: isBrowserDefaultDark() ? 'Visual Studio Dark' : 'Visual Studio Light',
   wordWrap: true,

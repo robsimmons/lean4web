@@ -198,6 +198,21 @@ export function SettingsPopup({
         </div>
         <div>
           <Switch
+            id="prioritizeServerMessages"
+            onChange={() => {
+              updateSetting(
+                'prioritizeServerMessages',
+                !newSettings.prioritizeServerMessages,
+              )
+            }}
+            checked={newSettings.prioritizeServerMessages}
+          />
+          <label htmlFor="prioritizeServerMessages">
+            Prioritize interactive server messages
+          </label>
+        </div>
+        <div>
+          <Switch
             id="inUrl"
             onChange={() => {
               updateSetting('inUrl', !newSettings.inUrl)

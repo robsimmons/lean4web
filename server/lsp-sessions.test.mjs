@@ -113,6 +113,54 @@ test('sends file progress and infoview RPC responses on hi', async () => {
   writer.dispose()
 })
 
+test('client can disable server message prioritization', async () => {
+  const hi = new FakeSocket()
+  const lo = new FakeSocket()
+  const { reader, writer } = createLspWebSocketTransports({ hi, lo })
+  const received = []
+  reader.listen((message) => received.push(message))
+
+  lo.emit(
+    'message',
+    JSON.stringify({
+      jsonrpc: '2.0',
+      method: '$/lean4web/setServerMessagePrioritization',
+      params: { enabled: false },
+    }),
+  )
+  lo.emit(
+    'message',
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: '$/lean/rpc/call',
+      params: { method: 'Lean.Widget.getInteractiveGoals' },
+    }),
+  )
+
+  await writer.write({
+    jsonrpc: '2.0',
+    method: '$/lean/fileProgress',
+    params: {},
+  })
+  await writer.write({ jsonrpc: '2.0', id: 1, result: null })
+
+  assert.deepEqual(
+    received.map((message) => message.method),
+    ['$/lean/rpc/call'],
+  )
+  assert.equal(hi.sent.length, 0)
+  assert.deepEqual(
+    lo.sent.map((message) => {
+      const parsed = JSON.parse(message)
+      return parsed.method ?? parsed.id
+    }),
+    ['$/lean/fileProgress', 1],
+  )
+  reader.dispose()
+  writer.dispose()
+})
+
 test('channel writer keeps hi and lo sends on independent sockets', async () => {
   const hi = new FakeSocket()
   const lo = new FakeSocket()
