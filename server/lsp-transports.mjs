@@ -1,5 +1,19 @@
 import * as rpc from 'vscode-ws-jsonrpc'
 
+const FILE_PROGRESS_METHOD = '$/lean/fileProgress'
+const RPC_CALL_METHOD = '$/lean/rpc/call'
+const HIGH_PRIORITY_RPC_METHODS = new Set([
+  'Lean.Widget.getInteractiveGoals',
+  'Lean.Widget.getInteractiveTermGoal',
+  'Lean.Widget.getWidgets',
+  'Lean.Widget.getInteractiveDiagnostics',
+])
+
+const hasOwn = (value, property) =>
+  value !== null &&
+  typeof value === 'object' &&
+  Object.prototype.hasOwnProperty.call(value, property)
+
 const combineEvents =
   (...events) =>
   (listener) => {
@@ -27,9 +41,54 @@ export function createMergedMessageReader(readers) {
   }
 }
 
-/** Central selection point for future server-originated message priority. */
-export function selectServerChannel(_message) {
+function createObservedMessageReader(reader, observeMessage) {
+  return {
+    onError: reader.onError,
+    onClose: reader.onClose,
+    onPartialMessage: reader.onPartialMessage,
+    listen: (callback) =>
+      reader.listen((message) => {
+        observeMessage(message)
+        callback(message)
+      }),
+    dispose: () => reader.dispose(),
+  }
+}
+
+/** Selects a channel for server-originated messages without request context. */
+export function selectServerChannel(message) {
+  if (message?.method === FILE_PROGRESS_METHOD) return 'hi'
   return 'lo'
+}
+
+/** Tracks the client requests whose otherwise-unmarked responses belong on hi. */
+export function createServerChannelRouter() {
+  const highPriorityResponseIds = new Set()
+
+  return {
+    observeClientMessage: (message) => {
+      if (
+        message?.method === RPC_CALL_METHOD &&
+        HIGH_PRIORITY_RPC_METHODS.has(message.params?.method) &&
+        hasOwn(message, 'id')
+      ) {
+        highPriorityResponseIds.add(message.id)
+      }
+    },
+    selectServerChannel: (message) => {
+      const defaultChannel = selectServerChannel(message)
+      if (defaultChannel === 'hi') return defaultChannel
+
+      if (
+        !hasOwn(message, 'method') &&
+        hasOwn(message, 'id') &&
+        highPriorityResponseIds.delete(message.id)
+      ) {
+        return 'hi'
+      }
+      return 'lo'
+    },
+  }
 }
 
 export function createChannelMessageWriter(
@@ -66,10 +125,7 @@ const toRpcSocket = (ws) => ({
   dispose: () => ws.close(),
 })
 
-export function createLspWebSocketTransports(
-  channels,
-  selectChannel = selectServerChannel,
-) {
+export function createLspWebSocketTransports(channels, selectChannel) {
   const channelReaders = Object.fromEntries(
     Object.entries(channels).map(([channel, ws]) => [
       channel,
@@ -83,9 +139,19 @@ export function createLspWebSocketTransports(
     ]),
   )
   const readers = Object.values(channelReaders)
+  const combinedReader =
+    readers.length === 1 ? readers[0] : createMergedMessageReader(readers)
+  const router =
+    selectChannel === undefined && channelWriters.hi
+      ? createServerChannelRouter()
+      : undefined
+  const effectiveSelectChannel =
+    selectChannel ?? router?.selectServerChannel ?? (() => 'lo')
+
   return {
-    reader:
-      readers.length === 1 ? readers[0] : createMergedMessageReader(readers),
-    writer: createChannelMessageWriter(channelWriters, selectChannel),
+    reader: router
+      ? createObservedMessageReader(combinedReader, router.observeClientMessage)
+      : combinedReader,
+    writer: createChannelMessageWriter(channelWriters, effectiveSelectChannel),
   }
 }

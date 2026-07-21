@@ -50,6 +50,69 @@ test('merges both inbound channels and sends server messages on lo', async () =>
   writer.dispose()
 })
 
+test('sends file progress and infoview RPC responses on hi', async () => {
+  const hi = new FakeSocket()
+  const lo = new FakeSocket()
+  const { reader, writer } = createLspWebSocketTransports({ hi, lo })
+  reader.listen(() => {})
+
+  const rpcMethods = [
+    'Lean.Widget.getInteractiveGoals',
+    'Lean.Widget.getInteractiveTermGoal',
+    'Lean.Widget.getWidgets',
+    'Lean.Widget.getInteractiveDiagnostics',
+  ]
+  rpcMethods.forEach((method, id) => {
+    lo.emit(
+      'message',
+      JSON.stringify({
+        jsonrpc: '2.0',
+        id,
+        method: '$/lean/rpc/call',
+        params: { method },
+      }),
+    )
+  })
+  lo.emit(
+    'message',
+    JSON.stringify({
+      jsonrpc: '2.0',
+      id: 'ordinary-rpc',
+      method: '$/lean/rpc/call',
+      params: { method: 'Lean.Widget.lazyTraceChildrenToInteractive' },
+    }),
+  )
+
+  await writer.write({
+    jsonrpc: '2.0',
+    method: '$/lean/fileProgress',
+    params: {},
+  })
+  for (const id of rpcMethods.keys()) {
+    await writer.write({ jsonrpc: '2.0', id, result: null })
+  }
+  await writer.write({
+    jsonrpc: '2.0',
+    id: 'ordinary-rpc',
+    result: null,
+  })
+  await writer.write({ jsonrpc: '2.0', id: 0, result: null })
+
+  assert.deepEqual(
+    hi.sent.map((message) => {
+      const parsed = JSON.parse(message)
+      return parsed.method ?? parsed.id
+    }),
+    ['$/lean/fileProgress', 0, 1, 2, 3],
+  )
+  assert.deepEqual(
+    lo.sent.map((message) => JSON.parse(message).id),
+    ['ordinary-rpc', 0],
+  )
+  reader.dispose()
+  writer.dispose()
+})
+
 test('channel writer keeps hi and lo sends on independent sockets', async () => {
   const hi = new FakeSocket()
   const lo = new FakeSocket()
