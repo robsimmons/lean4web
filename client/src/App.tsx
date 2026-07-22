@@ -5,7 +5,6 @@ import './css/Collab.css'
 import CodeMirror, { EditorView } from '@uiw/react-codemirror'
 import { useAtom } from 'jotai/react'
 import { LeanMonaco, LeanMonacoEditor, LeanMonacoOptions } from 'lean4monaco'
-import * as monaco from 'monaco-editor'
 import * as path from 'path'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Split from 'react-split'
@@ -40,7 +39,7 @@ function App() {
   const editorRef = useRef<HTMLDivElement>(null)
   const infoviewRef = useRef<HTMLDivElement>(null)
   const [dragging, setDragging] = useState<boolean | null>(false)
-  const [editor, setEditor] = useState<monaco.editor.IStandaloneCodeEditor>()
+  const [editor, setEditor] = useState<LeanMonacoEditor['editor']>()
   const [leanMonaco, setLeanMonaco] = useState<LeanMonaco>()
   const [settings] = useAtom(settingsAtom)
   const [mobile] = useAtom(mobileAtom)

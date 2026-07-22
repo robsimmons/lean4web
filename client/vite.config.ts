@@ -1,10 +1,14 @@
 import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react-swc'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import { nodePolyfills } from 'vite-plugin-node-polyfills'
 import { viteStaticCopy } from 'vite-plugin-static-copy'
 import svgr from 'vite-plugin-svgr'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
 // https://vitejs.dev/config/
 export default defineConfig({
@@ -40,13 +44,15 @@ export default defineConfig({
       targets: [
         {
           src: [
-            '../node_modules/@leanprover/infoview/dist/*',
-            '../node_modules/lean4monaco/dist/webview/webview.js',
+            '../lean4monaco/node_modules/@leanprover/infoview/dist/*',
+            '../lean4monaco/dist/webview/webview.js',
           ],
           dest: 'infoview',
         },
         {
-          src: ['../node_modules/@leanprover/infoview/dist/codicon.ttf'],
+          src: [
+            '../lean4monaco/node_modules/@leanprover/infoview/dist/codicon.ttf',
+          ],
           dest: 'assets',
         },
       ],
@@ -77,6 +83,19 @@ export default defineConfig({
     },
   },
   resolve: {
-    alias: {},
+    alias: [
+      {
+        find: /^lean4monaco$/,
+        replacement: path.resolve(__dirname, '../lean4monaco/src/index.ts'),
+      },
+      {
+        // y-monaco's deep import is incompatible with Monaco 0.56's export map.
+        find: /^monaco-editor\/esm\/vs\/editor\/editor\.api\.js$/,
+        replacement: path.resolve(
+          __dirname,
+          '../lean4monaco/node_modules/monaco-editor/esm/vs/editor/editor.api.js',
+        ),
+      },
+    ],
   },
 })
