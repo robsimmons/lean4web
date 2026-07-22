@@ -44,14 +44,14 @@ export default defineConfig({
       targets: [
         {
           src: [
-            '../lean4monaco/node_modules/@leanprover/infoview/dist/*',
+            '../node_modules/@leanprover/infoview/dist/*',
             '../lean4monaco/dist/webview/webview.js',
           ],
           dest: 'infoview',
         },
         {
           src: [
-            '../lean4monaco/node_modules/@leanprover/infoview/dist/codicon.ttf',
+            '../node_modules/@leanprover/infoview/dist/codicon.ttf',
           ],
           dest: 'assets',
         },
@@ -87,14 +87,6 @@ export default defineConfig({
       {
         find: /^lean4monaco$/,
         replacement: path.resolve(__dirname, '../lean4monaco/src/index.ts'),
-      },
-      {
-        // y-monaco's deep import is incompatible with Monaco 0.56's export map.
-        find: /^monaco-editor\/esm\/vs\/editor\/editor\.api\.js$/,
-        replacement: path.resolve(
-          __dirname,
-          '../lean4monaco/node_modules/monaco-editor/esm/vs/editor/editor.api.js',
-        ),
       },
     ],
   },
