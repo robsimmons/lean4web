@@ -1,0 +1,106 @@
+name: Test
+run-name: Test end-to-end
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - "main"
+  pull_request:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    shell: bash
+env:
+  NODE_VERSION: 25
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+      - uses: actions/setup-node@v4
+      - run: npm install
+      - run: npm run build
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+        browser:
+          - electron
+          - chrome
+          - firefox
+          - webkit
+          - chromium
+          - edge
+        exclude:
+          - os: macos-latest
+            browser: chromium
+          - os: windows-latest
+            browser: chromium
+          - os: ubuntu-latest
+            browser: edge
+          - os: macos-latest
+            browser: edge
+        include:
+          - os: ubuntu-latest
+            name: Linux
+          - os: macos-latest
+            name: macOS
+          - os: windows-latest
+            name: Windows
+    name: ${{ matrix.name }} - ${{ matrix.browser }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: false
+    steps:
+
+      - name: Setup firefox (macOS)
+        if: matrix.os == 'macos-latest' && matrix.browser == 'firefox'
+        uses: browser-actions/setup-firefox@v1
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - uses: leanprover/lean-action@v1
+        with:
+          lake-package-directory: "demo/server/LeanProject"
+          use-github-cache: false
+          use-mathlib-cache: false
+          auto-config: false
+          build: false
+          test: false
+          lint: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - run: npm install
+
+      - name: Run tests
+        run: npm run test
+
+      - name: Run tests (Windows User Agent)
+        if: matrix.browser == 'chromium'
+        run: npm run test:windows
+
+  all-test:
+    name: all
+    needs: test
+    runs-on: ubuntu-latest
+    if: ${{ always() }}
+    steps:
+      - run: |
+          if [[ "${{ needs.test.result }}" != "success" ]]; then
+            echo "Matrix failed"
+            exit 1
+          fi

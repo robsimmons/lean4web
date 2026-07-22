@@ -1,4 +1,0 @@
-[submodule "lean4monaco"]
-	path = lean4monaco
-	url = https://github.com/Vtec234/lean4monaco
-	branch = ws-multi

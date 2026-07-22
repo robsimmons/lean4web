@@ -1,0 +1,27 @@
+{
+  "compilerOptions": {
+    "target": "ES2024",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "lib": ["ES2024", "ES2024.String", "DOM", "DOM.Iterable"],
+    "skipLibCheck": true,
+
+    "jsx": "react-jsx",
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": false,
+    "declaration": true,
+
+    /* Linting */
+    "alwaysStrict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+
+    "experimentalDecorators": true,
+
+    "outDir": "./dist",
+  },
+  "include": ["src/index.ts"]
+}

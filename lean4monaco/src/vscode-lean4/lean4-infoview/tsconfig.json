@@ -1,0 +1,38 @@
+{
+    "compilerOptions": {
+        /* Projects */
+        "composite": true,
+
+        /* Language and Environment */
+        "target": "esnext",
+        "lib": ["DOM", "DOM.Iterable", "ESNext"],
+        "jsx": "react-jsx",
+
+        /* Modules */
+        "module": "esnext",
+        "moduleResolution": "bundler",
+
+        /* Emit code */
+        "sourceMap": true,
+        "rootDir": "src",
+        "outDir": "dist",
+
+        /* Emit declarations */
+        "declaration": true,
+        "declarationDir": "dist",
+
+        /* Interop Constraints */
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+
+        /* Type Checking */
+        "strict": true,
+        "noImplicitAny": true,
+        "noFallthroughCasesInSwitch": true,
+
+        /* Completeness */
+        "skipLibCheck": true
+    },
+    "include": ["src/**/*"],
+    "exclude": ["dist"]
+}

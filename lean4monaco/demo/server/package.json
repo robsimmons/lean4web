@@ -1,0 +1,20 @@
+{
+  "name": "lean4monaco-server",
+  "version": "1.0.0",
+  "main": "index.mjs",
+  "scripts": {
+    "build": "cd LeanProject && lake build",
+    "start": "node index.mjs"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "child_process": "^1.0.2",
+    "express": "^4.19.2",
+    "node": "^22.6.0",
+    "url": "^0.11.4",
+    "vscode-ws-jsonrpc": "^3.3.2",
+    "ws": "^8.18.0"
+  }
+}
